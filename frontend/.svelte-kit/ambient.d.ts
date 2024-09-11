@@ -26,6 +26,7 @@
  * ```
  */
 declare module '$env/static/private' {
+	export const VITE_API_URL: string;
 	export const REPLIT_PID1_FLAG_REPLIT_RTLD_LOADER: string;
 	export const npm_command: string;
 	export const PKG_CONFIG_FOR_TARGET: string;
@@ -34,6 +35,7 @@ declare module '$env/static/private' {
 	export const npm_config_cache: string;
 	export const NIX_BUILD_CORES: string;
 	export const REPL_OWNER: string;
+	export const API_URL: string;
 	export const DATABASE_URL: string;
 	export const configureFlags: string;
 	export const NIXPKGS_ALLOW_UNFREE: string;
@@ -209,6 +211,7 @@ declare module '$env/static/public' {
  */
 declare module '$env/dynamic/private' {
 	export const env: {
+		VITE_API_URL: string;
 		REPLIT_PID1_FLAG_REPLIT_RTLD_LOADER: string;
 		npm_command: string;
 		PKG_CONFIG_FOR_TARGET: string;
@@ -217,6 +220,7 @@ declare module '$env/dynamic/private' {
 		npm_config_cache: string;
 		NIX_BUILD_CORES: string;
 		REPL_OWNER: string;
+		API_URL: string;
 		DATABASE_URL: string;
 		configureFlags: string;
 		NIXPKGS_ALLOW_UNFREE: string;
