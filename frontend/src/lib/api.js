@@ -5,8 +5,8 @@ console.log("API_URL:", API_URL);
 export async function fetchBusinesses() {
   console.log("Fetching businesses from:", `${API_URL}/businesses`);
   const response = await fetch(`${API_URL}/businesses`);
-  console.log("Response:", response);
   if (!response.ok) {
+    console.log("Response:", response);
     throw new Error("Failed to fetch businesses");
   }
   return response.json();
@@ -30,6 +30,36 @@ export async function fetchBusinessById(id) {
   console.log("Response:", response);
   if (!response.ok) {
     throw new Error("Failed to fetch business details");
+  }
+  return response.json();
+}
+
+export async function registerUser(userData) {
+  console.log("Registering user");
+  const response = await fetch(`${API_URL}/users/register`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(userData),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to register user');
+  }
+  return response.json();
+}
+
+export async function loginUser(credentials) {
+  console.log("Logging in user");
+  const response = await fetch(`${API_URL}/users/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(credentials),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to login');
   }
   return response.json();
 }

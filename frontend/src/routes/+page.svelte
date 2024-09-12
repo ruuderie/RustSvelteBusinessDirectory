@@ -2,12 +2,17 @@
   import { onMount } from 'svelte';
   import BusinessCard from '$lib/components/BusinessCard.svelte';
   import SearchBar from '$lib/components/SearchBar.svelte';
-  import { fetchBusinesses, searchBusinesses } from '$lib/api';
+  import UserRegistration from '$lib/components/UserRegistration.svelte';
+  import UserLogin from '$lib/components/UserLogin.svelte';
+  import { fetchBusinesses, searchBusinesses, registerUser, loginUser } from '$lib/api';
 
   let businesses = [];
   let searchQuery = '';
   let loading = true;
   let error = null;
+  let user = null;
+  let showRegistration = false;
+  let showLogin = false;
 
   onMount(async () => {
     console.log('Fetching businesses...');
@@ -36,6 +41,37 @@
       loading = false;
     }
   }
+
+  async function handleRegister(event) {
+    try {
+      const userData = event.detail;
+      const newUser = await registerUser(userData);
+      user = newUser;
+      showRegistration = false;
+    } catch (err) {
+      console.error('Error registering user:', err);
+      error = err.message;
+    }
+  }
+
+  async function handleLogin(event) {
+    try {
+      const credentials = event.detail;
+      const token = await loginUser(credentials);
+      // Store the token in localStorage or a secure cookie
+      localStorage.setItem('token', token);
+      user = { email: credentials.email }; // You might want to fetch user details here
+      showLogin = false;
+    } catch (err) {
+      console.error('Error logging in:', err);
+      error = err.message;
+    }
+  }
+
+  function handleLogout() {
+    localStorage.removeItem('token');
+    user = null;
+  }
 </script>
 
 <svelte:head>
@@ -44,6 +80,26 @@
 
 <div class="container mx-auto px-4 py-8">
   <h1 class="text-3xl font-bold text-center mb-8">Business Directory</h1>
+
+  {#if user}
+    <div class="mb-4">
+      <p>Welcome, {user.email}!</p>
+      <button on:click={handleLogout}>Logout</button>
+    </div>
+  {:else}
+    <div class="mb-4">
+      <button on:click={() => showRegistration = true}>Register</button>
+      <button on:click={() => showLogin = true}>Login</button>
+    </div>
+  {/if}
+
+  {#if showRegistration}
+    <UserRegistration on:register={handleRegister} />
+  {/if}
+
+  {#if showLogin}
+    <UserLogin on:login={handleLogin} />
+  {/if}
 
   <div class="mb-8">
     <SearchBar bind:value={searchQuery} on:search={handleSearch} />
@@ -63,16 +119,3 @@
     </div>
   {/if}
 </div>
-
-<style>
-  h1 {
-    text-align: center;
-    margin-bottom: 20px;
-  }
-
-  .business-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 20px;
-  }
-</style>
