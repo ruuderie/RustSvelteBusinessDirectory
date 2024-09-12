@@ -2,7 +2,7 @@ mod api;
 mod auth;
 mod db;
 mod entities;
-mod migrator;
+mod migration;
 mod models;
 
 use axum::{http, Router};
@@ -22,7 +22,7 @@ async fn main() {
     println!("Database connection established");
 
     // Run migrations
-    migrator::Migrator::up(&db, None)
+    migration::Migration::up(&db, None)
         .await
         .expect("Failed to run migrations");
     println!("Migrations completed");

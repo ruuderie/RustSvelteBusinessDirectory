@@ -13,6 +13,7 @@
   let user = null;
   let showRegistration = false;
   let showLogin = false;
+  let registrationError = ''; // Define registrationError here
 
   onMount(async () => {
     console.log('Fetching businesses...');
@@ -48,9 +49,16 @@
       const newUser = await registerUser(userData);
       user = newUser;
       showRegistration = false;
+      registrationError = '';
     } catch (err) {
       console.error('Error registering user:', err);
-      error = err.message;
+      if (err.status === 500) {
+        registrationError = 'An internal server error occurred. Please try again later.';
+      } else if (err.status === 409) {
+        registrationError = 'This email is already registered. Please login instead.';
+      } else {
+        registrationError = 'An error occurred during registration. Please try again.';
+      }
     }
   }
 
@@ -94,7 +102,7 @@
   {/if}
 
   {#if showRegistration}
-    <UserRegistration on:register={handleRegister} />
+    <UserRegistration on:register={handleRegister} errorMessage={registrationError} />
   {/if}
 
   {#if showLogin}

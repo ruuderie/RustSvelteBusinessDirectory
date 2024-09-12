@@ -9,8 +9,9 @@
   let username = '';
   let email = '';
   let password = '';
+  export let errorMessage = ''; // Add this line to accept the errorMessage prop
 
-  async function handleSubmit() {
+  function handleSubmit() {
     dispatch('register', { username, email, password });
   }
 </script>
@@ -28,5 +29,10 @@
     <Label for="password">Password</Label>
     <Input id="password" type="password" bind:value={password} required />
   </div>
+  
+  {#if errorMessage}
+    <p class="text-red-500">{errorMessage}</p>
+  {/if}
+  
   <Button type="submit">Register</Button>
 </form>

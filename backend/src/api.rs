@@ -8,6 +8,8 @@ use crate::entities::business::{self, Entity as Business};
 use crate::entities::user::{self, Entity as User};
 use crate::models::{BusinessSearch, UserRegistration, UserLogin};
 use crate::auth::{hash_password, verify_password, generate_jwt};
+use chrono::NaiveDateTime;
+use chrono::Utc;
 
 pub fn router() -> Router<DatabaseConnection> {
     Router::new()
@@ -21,8 +23,12 @@ pub fn router() -> Router<DatabaseConnection> {
 async fn get_businesses(
     State(db): State<DatabaseConnection>,
 ) -> Result<Json<Vec<business::Model>>, axum::http::StatusCode> {
+    println!("Fetching all businesses");
     match Business::find().all(&db).await {
-        Ok(businesses) => Ok(Json(businesses)),
+        Ok(businesses) => {
+            println!("Businesses: {:?}", businesses.len());
+            Ok(Json(businesses))
+        }
         Err(_) => Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
@@ -59,27 +65,67 @@ async fn register_user(
     State(db): State<DatabaseConnection>,
     Json(user_data): Json<UserRegistration>,
 ) -> Result<Json<user::Model>, axum::http::StatusCode> {
-    let hashed_password = hash_password(&user_data.password)
-        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+    println!("Received registration request for email: {}", user_data.email);
 
+    // Check if user already exists
+    let existing_user = match User::find()
+        .filter(user::Column::Email.eq(&user_data.email))
+        .one(&db)
+        .await
+    {
+        Ok(user) => user,
+        Err(e) => {
+            eprintln!("Database error when checking for existing user: {:?}", e);
+            return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    if existing_user.is_some() {
+        println!("User with email {} already exists", user_data.email);
+        return Err(axum::http::StatusCode::CONFLICT);
+    }
+
+    println!("Hashing password for new user");
+    let hashed_password = match hash_password(&user_data.password) {
+        Ok(hash) => hash,
+        Err(e) => {
+            eprintln!("Error hashing password: {:?}", e);
+            return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    println!("Creating new user active model");
     let new_user = user::ActiveModel {
         username: Set(user_data.username),
         email: Set(user_data.email),
         password_hash: Set(hashed_password),
-        created_at: Set(chrono::Utc::now()),
+        created_at: Set(Utc::now()),
         ..Default::default()
     };
 
+    println!("Inserting new user into database");
     match User::insert(new_user).exec(&db).await {
         Ok(result) => {
-            let user = User::find_by_id(result.last_insert_id)
-                .one(&db)
-                .await
-                .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
-                .ok_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
-            Ok(Json(user))
+            println!("User inserted, fetching user data");
+            match User::find_by_id(result.last_insert_id).one(&db).await {
+                Ok(Some(user)) => {
+                    println!("User registration successful");
+                    Ok(Json(user))
+                },
+                Ok(None) => {
+                    eprintln!("User not found after insertion");
+                    Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
+                },
+                Err(e) => {
+                    eprintln!("Error fetching newly inserted user: {:?}", e);
+                    Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
+                }
+            }
         },
-        Err(_) => Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
+        Err(e) => {
+            eprintln!("Error inserting new user: {:?}", e);
+            Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
+        }
     }
 }
 
@@ -87,6 +133,7 @@ async fn login_user(
     State(db): State<DatabaseConnection>,
     Json(login_data): Json<UserLogin>,
 ) -> Result<Json<String>, axum::http::StatusCode> {
+    println!("Received login request for email: {}", login_data.email);
     let user = User::find()
         .filter(user::Column::Email.eq(&login_data.email))
         .one(&db)
@@ -97,10 +144,12 @@ async fn login_user(
     if verify_password(&login_data.password, &user.password_hash)
         .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
     {
+        println!("User authenticated");
         let token = generate_jwt(&user)
             .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
         Ok(Json(token))
     } else {
+        println!("User authentication failed");
         Err(axum::http::StatusCode::UNAUTHORIZED)
     }
 }
