@@ -5,8 +5,8 @@ console.log("API_URL:", API_URL);
 export async function fetchBusinesses() {
   console.log("Fetching businesses from:", `${API_URL}/businesses`);
   const response = await fetch(`${API_URL}/businesses`);
-  console.log("Response:", response);
   if (!response.ok) {
+    console.log("Response:", response);
     throw new Error("Failed to fetch businesses");
   }
   return response.json();
