@@ -1,6 +1,6 @@
 # Business Directory
 
-This project is a business directory website using Svelte for the frontend and Rust for the backend API. It allows users to view and search for business listings.
+This project is a business directory website using Svelte for the frontend and Rust for the backend API. It allows users to view and search for business listings, as well as register and login.
 
 ## Project Structure
 
@@ -37,12 +37,18 @@ The backend API will be available at `http://localhost:8000`.
 - Display a list of businesses
 - Search for businesses by name or category
 - View detailed information about a specific business
+- User registration and login
 
 ## API Endpoints
 
+### Businesses
 - GET `/api/businesses`: Fetch all businesses
 - GET `/api/businesses/search?q={query}`: Search for businesses
 - GET `/api/businesses/{id}`: Fetch a specific business by ID
+
+### Users
+- POST `/api/users/register`: Register a new user
+- POST `/api/users/login`: Login a user
 
 ## Database
 
@@ -51,3 +57,17 @@ The project uses PostgreSQL as the database. Make sure to set up the database an
 ## Development
 
 To work on this project, you'll need to have Node.js, npm, and Rust installed on your system. Follow the instructions in the respective directories to set up and run the frontend and backend components.
+
+### Environment Variables
+
+Make sure to set up the following environment variables:
+
+- Frontend:
+  - `API_URL`: The URL of the backend API (default: "http://localhost:8000/api")
+
+- Backend:
+  - Database connection string (in the `.env` file)
+
+## Security Note
+
+This project includes user authentication. Ensure that you're using HTTPS in production and following best practices for handling user data and authentication tokens.
