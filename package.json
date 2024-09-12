@@ -10,6 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@shadcn/ui": "^0.0.4",
     "@sveltejs/kit": "^2.5.26",
     "svelte": "^4.2.19",
     "vite": "^5.4.3"

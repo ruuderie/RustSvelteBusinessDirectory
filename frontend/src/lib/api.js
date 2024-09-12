@@ -33,3 +33,33 @@ export async function fetchBusinessById(id) {
   }
   return response.json();
 }
+
+export async function registerUser(userData) {
+  console.log("Registering user");
+  const response = await fetch(`${API_URL}/users/register`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(userData),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to register user');
+  }
+  return response.json();
+}
+
+export async function loginUser(credentials) {
+  console.log("Logging in user");
+  const response = await fetch(`${API_URL}/users/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(credentials),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to login');
+  }
+  return response.json();
+}
