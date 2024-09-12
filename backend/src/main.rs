@@ -7,6 +7,7 @@ mod migrator;
 use axum::{
     routing::get,
     Router,
+    http
 };
 use sea_orm::Database;
 use sea_orm_migration::MigratorTrait;
@@ -31,9 +32,13 @@ async fn main() {
 
     println!("Successfully connected to the database and ran migrations");
 
+    let frontend_url = std::env::var("FRONTEND_URL")
+        .unwrap_or_else(|_| "http://localhost:5001".to_string());
+    println!("Frontend URL: {}", frontend_url);
+
     let cors = CorsLayer::new()
-        .allow_origin("http://5c25f946-99a5-403b-9a0e-20f0b87e3036-80.riker.replit.dev".parse::<http::HeaderValue>().unwrap())
-        .allow_methods(vec![http::Method::GET, http::Method::POST])
+        .allow_origin(frontend_url.parse::<http::HeaderValue>().unwrap())
+        .allow_methods([http::Method::GET, http::Method::POST])
         .allow_headers(Any);
 
     let app = Router::new()
