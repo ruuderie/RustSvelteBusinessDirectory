@@ -42,23 +42,27 @@
   <title>Business Directory</title>
 </svelte:head>
 
-<h1>Business Directory</h1>
+<div class="container mx-auto px-4 py-8">
+  <h1 class="text-3xl font-bold text-center mb-8">Business Directory</h1>
 
-<SearchBar bind:value={searchQuery} on:search={handleSearch} />
-
-{#if loading}
-  <p>Loading businesses...</p>
-{:else if error}
-  <p>Error: {error}</p>
-{:else if businesses.length === 0}
-  <p>No businesses found.</p>
-{:else}
-  <div class="business-list">
-    {#each businesses as business (business.id)}
-      <BusinessCard {business} />
-    {/each}
+  <div class="mb-8">
+    <SearchBar bind:value={searchQuery} on:search={handleSearch} />
   </div>
-{/if}
+
+  {#if loading}
+    <p class="text-center">Loading businesses...</p>
+  {:else if error}
+    <p class="text-center text-red-500">Error: {error}</p>
+  {:else if businesses.length === 0}
+    <p class="text-center">No businesses found.</p>
+  {:else}
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      {#each businesses as business (business.id)}
+        <BusinessCard {business} />
+      {/each}
+    </div>
+  {/if}
+</div>
 
 <style>
   h1 {
