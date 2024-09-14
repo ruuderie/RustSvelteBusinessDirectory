@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-axum = "0.6.18"
+axum = {version = "0.6.18", features = ["macros", "headers"]}
 tokio = { version = "1.28.2", features = ["full"] }
 sea-orm = { version = "0.11.3", features = ["sqlx-postgres", "runtime-tokio-native-tls", "macros"] }
 tower-http = { version = "0.4.1", features = ["cors"] }
@@ -15,4 +15,9 @@ sea-orm-migration = "0.11.0"
 async-std = { version = "1.12.0", features = ["attributes", "tokio1"] }
 jsonwebtoken = "9.3.0"
 bcrypt = "0.15.1"
+uuid = { version = "1.4.1", features = ["v4", "fast-rng", "macro-diagnostics"] }
 chrono = { version = "0.4.38", features = ["serde"] }
+strum = "0.26.3"
+strum_macros = "0.26.4"
+
+

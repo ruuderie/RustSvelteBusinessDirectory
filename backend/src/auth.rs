@@ -5,8 +5,9 @@ use bcrypt::{hash, verify, DEFAULT_COST};
 use crate::entities::user;
 
 #[derive(Debug, Serialize, Deserialize)]
-struct Claims {
-    sub: String,
+pub struct Claims {
+    sub: String,           // User ID
+    directory_id: String,  // Directory ID
     exp: usize,
 }
 
@@ -26,6 +27,7 @@ pub fn generate_jwt(user: &user::Model) -> Result<String, jsonwebtoken::errors::
 
     let claims = Claims {
         sub: user.id.to_string(),
+        directory_id: user.directory_id.to_string(), // Include directory_id
         exp: expiration as usize,
     };
 

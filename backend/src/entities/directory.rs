@@ -4,44 +4,41 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "user")]
+#[sea_orm(table_name = "directory")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
-    pub username: String,
-    pub email: String,
-    pub password_hash: String,
-    pub is_admin: bool,
+    pub name: String,
+    pub niche: String,
+    pub domain: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter)]
 pub enum Relation {
-    UserProfile,
+    Profile,
+    Listing,
 }
 
 impl RelationTrait for Relation {
     fn def(&self) -> RelationDef {
         match self {
-            Self::UserProfile => Entity::has_many(crate::entities::user_profile::Entity).into(),
+            Self::Profile => Entity::has_many(crate::entities::profile::Entity).into(),
+            Self::Listing => Entity::has_many(crate::entities::listing::Entity).into(),
         }
-    }
-}
-
-impl Related<crate::entities::user_profile::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::UserProfile.def()
     }
 }
 
 impl Related<crate::entities::profile::Entity> for Entity {
     fn to() -> RelationDef {
-        crate::entities::user_profile::Relation::Profile.def()
+        Relation::Profile.def()
     }
+}
 
-    fn via() -> Option<RelationDef> {
-        Some(crate::entities::user_profile::Relation::User.def().rev())
+impl Related<crate::entities::listing::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Listing.def()
     }
 }
 
