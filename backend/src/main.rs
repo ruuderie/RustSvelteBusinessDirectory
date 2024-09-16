@@ -4,6 +4,8 @@ mod db;
 mod entities;
 mod migration;
 mod models;
+mod middleware;
+mod handlers;
 
 use axum::{http, Router};
 use sea_orm::Database;

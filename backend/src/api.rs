@@ -11,9 +11,9 @@ use crate::models::{
     AdPurchaseCreate, ListingCreate, ListingUpdate, ProfileSearch, UserLogin, UserRegistration,
 };
 use crate::auth::{generate_jwt, hash_password, verify_password};
-use crate::middleware::auth_middleware;
-use crate::handlers::{
-   ad_purchases, listings, profiles, user_profiles, users, /* ad_placements,*/ 
+use crate::{
+    middleware::auth_middleware,
+    handlers::{ad_purchases, listings, profiles, user_profiles, users},
 };
 use chrono::Utc;
 use uuid::Uuid;
