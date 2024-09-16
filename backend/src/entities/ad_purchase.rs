@@ -2,10 +2,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
-/* 
-use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
-*/
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "ad_purchase")]
 pub struct Model {
@@ -30,7 +27,12 @@ pub enum Relation {
         to = "crate::entities::profile::Column::Id"
     )]
     Profile,
-    /*AdPlacement,*/
+    #[sea_orm(
+        belongs_to = "crate::entities::ad_placement::Entity",
+        from = "Column::AdPlacementId",
+        to = "crate::entities::ad_placement::Column::Id"
+    )]
+    AdPlacement,
 }
 #[derive(Debug, Clone, PartialEq, Eq, DeriveActiveEnum, Serialize, Deserialize, EnumIter)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "ad_status")]
@@ -50,11 +52,11 @@ impl Related<crate::entities::profile::Entity> for Entity {
         Relation::Profile.def()
     }
 }
-/*
+
 impl Related<crate::entities::ad_placement::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::AdPlacement.def()
     }
 }
-*/
+
 impl ActiveModelBehavior for ActiveModel {}

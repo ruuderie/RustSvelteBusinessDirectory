@@ -1,15 +1,16 @@
 // src/handlers/ad_purchases.rs
 
 use axum::{
-    extract::{Extension, Json, Path, State},
+    extract::{Extension, Path, State},
     http::StatusCode,
-    response::IntoResponse,
+    response::{IntoResponse, Json},
 };
 use sea_orm::{
-    DatabaseConnection, EntityTrait, QueryFilter, Set, ActiveModelTrait,ColumnTrait
+    DatabaseConnection, EntityTrait, QueryFilter, Set, ActiveModelTrait, ColumnTrait,
+    InsertResult,
 };
 use crate::entities::{
-    ad_purchase, profile, user_profile, user,ad_purchase::AdStatus /*ad_placement,*/
+    ad_purchase, profile, user_profile, user, ad_purchase::AdStatus, ad_placement,
 };
 use crate::models::AdPurchaseCreate;
 use uuid::Uuid;
@@ -20,11 +21,11 @@ pub async fn create_ad_purchase(
     Extension(current_user): Extension<user::Model>,
     Extension(directory_ids): Extension<Vec<Uuid>>,
     Json(input): Json<AdPurchaseCreate>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<(StatusCode, Json<ad_purchase::Model>), StatusCode> {
     // Fetch the profile
     let profile = profile::Entity::find()
         .filter(profile::Column::Id.eq(input.profile_id))
-        .filter(profile::Column::DirectoryId.is_in(directory_ids))
+        .filter(profile::Column::DirectoryId.is_in(directory_ids.clone()))
         .one(&db)
         .await
         .map_err(|err| {
@@ -48,8 +49,7 @@ pub async fn create_ad_purchase(
         return Err(StatusCode::FORBIDDEN);
     }
 
-        // Fetch the ad placement
-        /* 
+    // Fetch the ad placement
     let ad_placement = ad_placement::Entity::find()
         .filter(ad_placement::Column::Id.eq(input.ad_placement_id))
         .filter(ad_placement::Column::DirectoryId.is_in(directory_ids))
@@ -60,13 +60,12 @@ pub async fn create_ad_purchase(
             StatusCode::INTERNAL_SERVER_ERROR
         })?
         .ok_or(StatusCode::NOT_FOUND)?;
-    */
+    
     // Create the ad purchase
-    let ad_placement_id = Uuid::new_v4();
     let new_ad_purchase = ad_purchase::ActiveModel {
         id: Set(Uuid::new_v4()),
         profile_id: Set(profile.id),
-        ad_placement_id: Set(ad_placement_id),
+        ad_placement_id: Set(ad_placement.id),
         content: Set(input.content),
         start_date: Set(input.start_date),
         end_date: Set(input.end_date),
@@ -75,13 +74,23 @@ pub async fn create_ad_purchase(
         updated_at: Set(Utc::now()),
     };
 
-    let inserted_ad_purchase = new_ad_purchase
-        .insert(&db)
+    let insert_result: InsertResult<ad_purchase::ActiveModel> = ad_purchase::Entity::insert(new_ad_purchase)
+        .exec(&db)
         .await
         .map_err(|err| {
             eprintln!("Error creating ad purchase: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
+
+    // Fetch the inserted ad purchase
+    let inserted_ad_purchase = ad_purchase::Entity::find_by_id(insert_result.last_insert_id)
+        .one(&db)
+        .await
+        .map_err(|err| {
+            eprintln!("Error fetching inserted ad purchase: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok((StatusCode::CREATED, Json(inserted_ad_purchase)))
 }

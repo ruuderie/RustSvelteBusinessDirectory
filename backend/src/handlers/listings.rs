@@ -1,5 +1,5 @@
 use crate::entities::{
-/*    ad_placement::{self, Entity as AdPlacement},*/
+    ad_placement::{self, Entity as AdPlacement},
     ad_purchase::{self, Entity as AdPurchase},
     listing::{self, Entity as Listing},
     profile::{self, Entity as Profile},
@@ -103,7 +103,7 @@ pub async fn create_listing(
     let new_listing = listing::ActiveModel {
         id: Set(Uuid::new_v4()),
         profile_id: Set(profile.id),
-        directory_id: Set(profile.directory_id), // Add this line
+        directory_id: Set(profile.directory_id),
         title: Set(input.title),
         description: Set(input.description),
         category: Set(input.category),

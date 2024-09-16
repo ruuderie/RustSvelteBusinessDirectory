@@ -1,5 +1,5 @@
 use crate::entities::{
-    /*  ad_placement::{self, Entity as AdPlacement}, */
+    ad_placement::{self, Entity as AdPlacement},
     ad_purchase::{self, Entity as AdPurchase},
     profile::{self, Entity as Profile},
     user::{self, Entity as User},
