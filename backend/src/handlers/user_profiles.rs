@@ -168,7 +168,7 @@ pub async fn update_user_role_in_profile(
     }
 
     // Fetch the user_profile association to update
-    let mut user_profile_to_update = user_profile::Entity::find()
+    let user_profile_to_update = user_profile::Entity::find()
         .filter(user_profile::Column::UserId.eq(user_id))
         .filter(user_profile::Column::ProfileId.eq(profile.id))
         .one(&db)

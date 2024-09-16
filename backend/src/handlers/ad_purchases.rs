@@ -72,6 +72,7 @@ pub async fn create_ad_purchase(
         status: Set(AdStatus::Pending),
         created_at: Set(Utc::now()),
         updated_at: Set(Utc::now()),
+        price: Set(input.price),
     };
 
     let insert_result: InsertResult<ad_purchase::ActiveModel> = ad_purchase::Entity::insert(new_ad_purchase)

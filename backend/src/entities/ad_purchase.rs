@@ -16,6 +16,7 @@ pub struct Model {
     pub status: AdStatus,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub price: f32,
 }
 
 

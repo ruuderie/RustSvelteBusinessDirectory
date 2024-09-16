@@ -12,7 +12,7 @@ use crate::models::{
 };
 use crate::auth::{generate_jwt, hash_password, verify_password};
 use crate::{
-    middleware::auth_middleware,
+    middleware::{middleware::auth_middleware},
     handlers::{ad_purchases, listings, profiles, user_profiles, users},
 };
 use chrono::Utc;

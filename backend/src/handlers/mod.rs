@@ -4,3 +4,4 @@ pub mod listings;
 pub mod profiles;
 pub mod user_profiles;
 pub mod users;
+pub mod admin;

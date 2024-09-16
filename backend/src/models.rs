@@ -135,6 +135,7 @@ pub struct AdPurchaseCreate {
     pub content: String,
     pub start_date: DateTime<Utc>,
     pub end_date: DateTime<Utc>,
+    pub price: f32,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]

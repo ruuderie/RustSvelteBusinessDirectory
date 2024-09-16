@@ -97,6 +97,7 @@ pub async fn create_ad_purchase(
         start_date: Set(input.start_date),
         end_date: Set(input.end_date),
         status: Set(ad_purchase::AdStatus::Pending),
+        price: Set(input.price),
         created_at: Set(Utc::now()),
         updated_at: Set(Utc::now()),
     };

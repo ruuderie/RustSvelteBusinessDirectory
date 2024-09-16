@@ -6,12 +6,17 @@ mod migration;
 mod models;
 mod middleware;
 mod handlers;
+mod admin;
 
-use axum::{http, Router};
+use axum::{http, Router, 
+    middleware::{from_fn_with_state, from_fn}
+};
 use sea_orm::Database;
 use sea_orm_migration::MigratorTrait;
 use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
+use crate::admin::admin_routes;
+use crate::middleware::{auth_middleware, admin_middleware};
 
 #[tokio::main]
 async fn main() {
@@ -42,6 +47,12 @@ async fn main() {
 
     let app = Router::new()
         .nest("/api", api::router(db.clone()))
+        .nest(
+            "/admin",
+            admin_routes(db.clone())
+                .layer(from_fn(admin_middleware))
+        )
+        .layer(from_fn_with_state(db.clone(), auth_middleware))
         .layer(cors);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
