@@ -1,8 +1,9 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
-use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
+use uuid::Uuid;
+use crate::entities::directory;
+use crate::entities::ad_purchase;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "profile")]
@@ -20,6 +21,7 @@ pub struct Model {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
+
 impl Model {
     pub fn business_details(&self) -> Option<BusinessDetails> {
         match self.profile_type {
@@ -33,7 +35,8 @@ impl Model {
         }
     }
 }
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, DeriveActiveEnum, EnumIter)]
+
+#[derive(Clone, Debug, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
 #[sea_orm(rs_type = "String", db_type = "String(Some(20))")]
 pub enum ProfileType {
     #[sea_orm(string_value = "Individual")]
@@ -50,16 +53,30 @@ pub struct BusinessDetails {
     pub website: Option<String>,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+#[derive(Copy, Clone, Debug, EnumIter)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::user_profile::Entity")]
-    UserProfile,
-    #[sea_orm(
-        belongs_to = "super::directory::Entity",
-        from = "Column::DirectoryId",
-        to = "super::directory::Column::Id"
-    )]
     Directory,
+    UserProfile,
+    AdPurchase,
+}
+
+impl RelationTrait for Relation {
+    fn def(&self) -> RelationDef {
+        match self {
+            Self::Directory => Entity::belongs_to(directory::Entity)
+                .from(Column::DirectoryId)
+                .to(directory::Column::Id)
+                .into(),
+            Self::UserProfile => Entity::has_many(super::user_profile::Entity).into(),
+            Self::AdPurchase => Entity::has_many(ad_purchase::Entity).into(),
+        }
+    }
+}
+
+impl Related<directory::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Directory.def()
+    }
 }
 
 impl Related<super::user_profile::Entity> for Entity {
@@ -78,12 +95,10 @@ impl Related<super::user::Entity> for Entity {
     }
 }
 
-impl ActiveModelBehavior for ActiveModel {}
-
-impl EntityName for Entity {
-    fn table_name(&self) -> &str {
-        "profile"
+impl Related<ad_purchase::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::AdPurchase.def()
     }
 }
 
-
+impl ActiveModelBehavior for ActiveModel {}

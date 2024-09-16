@@ -11,7 +11,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use sea_orm::{DatabaseConnection, EntityTrait, Set, Condition};
+use sea_orm::{DatabaseConnection, EntityTrait, Set, Condition, ColumnTrait, QueryFilter, ActiveModelTrait};
 use uuid::Uuid;
 use chrono::Utc;
 use serde::Deserialize;
@@ -31,16 +31,26 @@ pub async fn create_profile(
     Json(input): Json<CreateProfileInput>,
 ) -> Result<impl IntoResponse, StatusCode> {
     // Create the profile
-    let new_profile = profile::ActiveModel {
+    let mut new_profile = profile::ActiveModel {
         id: Set(Uuid::new_v4()),
         directory_id: Set(input.directory_id),
         profile_type: Set(input.profile_type),
         display_name: Set(input.display_name),
         contact_info: Set(input.contact_info),
-        business_details: Set(input.business_details),
+        business_name: Set(None),
+        business_address: Set(None),
+        business_phone: Set(None),
+        business_website: Set(None),
         created_at: Set(Utc::now()),
         updated_at: Set(Utc::now()),
     };
+
+    if let Some(business_details) = input.business_details {
+        new_profile.business_name = Set(Some(business_details.business_name));
+        new_profile.business_address = Set(Some(business_details.business_address));
+        new_profile.business_phone = Set(Some(business_details.business_phone));
+        new_profile.business_website = Set(business_details.website);
+    }
 
     let inserted_profile = new_profile.insert(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -57,13 +67,25 @@ pub async fn create_profile(
 
     Ok((StatusCode::CREATED, Json(inserted_profile)))
 }
+
 pub async fn get_profiles(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
 ) -> Result<Json<Vec<profile::Model>>, axum::http::StatusCode> {
-    // Fetch profiles associated with the user's directory
+    // Fetch profiles associated with the user
+    let user_profiles = UserProfile::find()
+        .filter(user_profile::Column::UserId.eq(current_user.id))
+        .all(&db)
+        .await
+        .map_err(|err| {
+            eprintln!("Error fetching user profiles: {:?}", err);
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let profile_ids: Vec<Uuid> = user_profiles.into_iter().map(|up| up.profile_id).collect();
+
     let profiles = Profile::find()
-        .filter(profile::Column::DirectoryId.eq(current_user.directory_id))
+        .filter(profile::Column::Id.is_in(profile_ids))
         .all(&db)
         .await
         .map_err(|err| {
@@ -79,9 +101,21 @@ pub async fn search_profiles(
     Extension(current_user): Extension<user::Model>,
     Query(params): Query<ProfileSearch>,
 ) -> Result<Json<Vec<profile::Model>>, axum::http::StatusCode> {
-    // Search profiles in the user's directory
+    // Fetch user profiles
+    let user_profiles = UserProfile::find()
+        .filter(user_profile::Column::UserId.eq(current_user.id))
+        .all(&db)
+        .await
+        .map_err(|err| {
+            eprintln!("Error fetching user profiles: {:?}", err);
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let profile_ids: Vec<Uuid> = user_profiles.into_iter().map(|up| up.profile_id).collect();
+
+    // Search profiles associated with the user
     let profiles = Profile::find()
-        .filter(profile::Column::DirectoryId.eq(current_user.directory_id))
+        .filter(profile::Column::Id.is_in(profile_ids))
         .filter(
             Condition::any()
                 .add(profile::Column::DisplayName.contains(&params.q))
@@ -102,10 +136,23 @@ pub async fn get_profile_by_id(
     Extension(current_user): Extension<user::Model>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<profile::Model>, axum::http::StatusCode> {
-    // Fetch the profile by ID and ensure it belongs to the same directory
-    let profile = Profile::find()
-        .filter(profile::Column::Id.eq(id))
-        .filter(profile::Column::DirectoryId.eq(current_user.directory_id))
+    // Check if the user has access to this profile
+    let user_profile = UserProfile::find()
+        .filter(user_profile::Column::UserId.eq(current_user.id))
+        .filter(user_profile::Column::ProfileId.eq(id))
+        .one(&db)
+        .await
+        .map_err(|err| {
+            eprintln!("Error fetching user profile: {:?}", err);
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    if user_profile.is_none() {
+        return Err(axum::http::StatusCode::FORBIDDEN);
+    }
+
+    // Fetch the profile by ID
+    let profile = Profile::find_by_id(id)
         .one(&db)
         .await
         .map_err(|err| {

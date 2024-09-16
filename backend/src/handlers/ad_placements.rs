@@ -4,42 +4,43 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::Json;
 use axum::Extension;
-use sea_orm::{prelude::*, Set};
+use sea_orm::{prelude::*, DatabaseConnection, EntityTrait, Set, Condition, ColumnTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 /*
 pub async fn get_ad_placements(
     State(db): State<DatabaseConnection>,
-    Extension(current_user): Extension<user::Model>,
-) -> Result<Json<Vec<AdPlacement::Model>>, axum::http::StatusCode> {
-    // Fetch ad placements within the user's directory
+    Extension(directory_ids): Extension<Vec<Uuid>>,
+) -> Result<Json<Vec<AdPlacement::Model>>, StatusCode> {
+    // Fetch ad placements within the user's directories
     let ad_placements = AdPlacement::find()
-        .filter(AdPlacement::Column::DirectoryId.eq(current_user.directory_id))
+        .filter(AdPlacement::Column::DirectoryId.is_in(directory_ids))
         .all(&db)
         .await
         .map_err(|err| {
             eprintln!("Error fetching ad placements: {:?}", err);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     Ok(Json(ad_placements))
 }
+
 pub async fn get_ad_placement_by_id(
     State(db): State<DatabaseConnection>,
-    Extension(current_user): Extension<User::Model>,
+    Extension(directory_ids): Extension<Vec<Uuid>>,
     Path(id): Path<Uuid>,
-) -> Result<Json<ad_placement::Model>, axum::http::StatusCode> {
-    // Fetch ad placement by ID within the user's directory
+) -> Result<Json<ad_placement::Model>, StatusCode> {
+    // Fetch ad placement by ID within the user's directories
     let ad_placement = AdPlacement::find()
         .filter(AdPlacement::Column::Id.eq(id))
-        .filter(AdPlacement::Column::DirectoryId.eq(current_user.directory_id))
+        .filter(AdPlacement::Column::DirectoryId.is_in(directory_ids))
         .one(&db)
         .await
         .map_err(|err| {
             eprintln!("Error fetching ad placement by ID: {:?}", err);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            StatusCode::INTERNAL_SERVER_ERROR
         })?
-        .ok_or(axum::http::StatusCode::NOT_FOUND)?;
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     Ok(Json(ad_placement))
 }

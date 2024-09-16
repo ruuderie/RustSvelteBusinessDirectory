@@ -11,10 +11,10 @@ use axum::{
     response::IntoResponse,
 };
 use crate::models::{UserLogin, UserRegistration};
-use sea_orm::{DatabaseConnection, EntityTrait, Set};
+use sea_orm::{DatabaseConnection, EntityTrait, Set, ColumnTrait, QueryFilter, ActiveModelTrait};
 use uuid::Uuid;
-use chrono::Utc;
-use crate::auth::{hash_password, verify_password, generate_jwt};
+use chrono::{Utc, Duration};
+use crate::auth::{hash_password, verify_password, generate_jwt, Claims};
 
 pub async fn register_user(
     State(db): State<DatabaseConnection>,
@@ -46,11 +46,15 @@ pub async fn register_user(
             axum::http::StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
+    // Clone username and email before moving them
+    let username = user_data.username.clone();
+    let email = user_data.email.clone();
+
     // Step 3: Create the user
     let new_user = user::ActiveModel {
         id: Set(Uuid::new_v4()),
-        username: Set(user_data.username),
-        email: Set(user_data.email),
+        username: Set(username.clone()),
+        email: Set(email.clone()),
         password_hash: Set(hashed_password),
         is_admin: Set(false),
         created_at: Set(Utc::now()),
@@ -79,7 +83,13 @@ pub async fn register_user(
         let new_profile = profile::ActiveModel {
             id: Set(Uuid::new_v4()),
             directory_id: Set(directory_id),
-            // Fill out other necessary fields for the profile entity here...
+            profile_type: Set(profile::ProfileType::Business), // Assuming it's a business profile
+            display_name: Set(username),
+            contact_info: Set(email),
+            business_name: Set(None),
+            business_address: Set(None),
+            business_phone: Set(None),
+            business_website: Set(None),
             created_at: Set(Utc::now()),
             updated_at: Set(Utc::now()),
         };
@@ -112,10 +122,8 @@ pub async fn register_user(
 pub async fn login_user(
     State(db): State<DatabaseConnection>,
     Json(login_data): Json<UserLogin>,
-) -> Result<Json<String>, axum::http::StatusCode> {
-    println!("Received login request for email: {}", login_data.email);
-
-    let directory_id = login_data.directory_id;
+) -> Result<Json<String>, StatusCode> {
+    println!("Received login request for email: {} in directory: {}", login_data.email, login_data.directory_id);
 
     // Find the user by email
     let user = User::find()
@@ -124,41 +132,53 @@ pub async fn login_user(
         .await
         .map_err(|err| {
             eprintln!("Error fetching user: {:?}", err);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            StatusCode::INTERNAL_SERVER_ERROR
         })?
-        .ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
+        .ok_or(StatusCode::UNAUTHORIZED)?;
 
     // Verify password
     if verify_password(&login_data.password, &user.password_hash)
         .map_err(|err| {
             eprintln!("Error verifying password: {:?}", err);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            StatusCode::INTERNAL_SERVER_ERROR
         })?
     {
         println!("User authenticated");
 
-        // Fetch user's profiles and associated directory_ids
-        let user_profiles = user_profile::Entity::find()
+        // Fetch user's profile for the specified directory
+        let user_profile = user_profile::Entity::find()
             .filter(user_profile::Column::UserId.eq(user.id))
             .find_with_related(profile::Entity)
             .all(&db)
             .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-        let directory_ids: Vec<Uuid> = user_profiles
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
             .into_iter()
-            .map(|(_, profile)| profile.directory_id)
-            .collect();
+            .find(|(_, profiles)| profiles.first().map_or(false, |p| p.directory_id == login_data.directory_id));
 
-        // Generate JWT including user_id and directory_ids
-        let token = generate_jwt(&user, &directory_ids)
-            .map_err(|err| {
-                eprintln!("Error generating JWT: {:?}", err);
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR
-            })?;
-        Ok(Json(token))
+        if let Some((user_profile, profile)) = user_profile {
+            let profile = profile.first().unwrap(); // Safe because we checked in the find() above
+            
+            // Generate JWT including user_id, profile_id, and directory_id
+            let claims = Claims {
+                sub: user.id.to_string(),
+                profile_id: user_profile.profile_id.to_string(),
+                directory_id: profile.directory_id.to_string(),
+                exp: (Utc::now() + Duration::hours(24)).timestamp() as usize,
+            };
+
+            let token = generate_jwt(claims)
+                .map_err(|err| {
+                    eprintln!("Error generating JWT: {:?}", err);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?;
+
+            Ok(Json(token))
+        } else {
+            println!("User not associated with the specified directory");
+            Err(StatusCode::FORBIDDEN)
+        }
     } else {
         println!("User authentication failed");
-        Err(axum::http::StatusCode::UNAUTHORIZED)
+        Err(StatusCode::UNAUTHORIZED)
     }
 }

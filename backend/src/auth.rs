@@ -6,9 +6,10 @@ use crate::entities::user;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
-    sub: String,           // User ID
-    directory_id: String,  // Directory ID
-    exp: usize,
+    pub sub: String,           // User ID
+    pub profile_id: String,    // Profile ID
+    pub directory_id: String,  // Directory ID
+    pub exp: usize,            // Expiration time
 }
 
 pub fn hash_password(password: &str) -> Result<String, bcrypt::BcryptError> {
@@ -19,18 +20,7 @@ pub fn verify_password(password: &str, hash: &str) -> Result<bool, bcrypt::Bcryp
     verify(password, hash)
 }
 
-pub fn generate_jwt(user: &user::Model) -> Result<String, jsonwebtoken::errors::Error> {
-    let expiration = Utc::now()
-        .checked_add_signed(Duration::hours(24))
-        .expect("valid timestamp")
-        .timestamp();
-
-    let claims = Claims {
-        sub: user.id.to_string(),
-        directory_id: user.directory_id.to_string(), // Include directory_id
-        exp: expiration as usize,
-    };
-
+pub fn generate_jwt(claims: Claims) -> Result<String, jsonwebtoken::errors::Error> {
     let header = Header::default();
     let encoding_key = EncodingKey::from_secret("your-secret-key".as_ref());
 

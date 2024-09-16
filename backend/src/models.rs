@@ -3,8 +3,8 @@ use uuid::Uuid;
 use crate::entities::user_profile::UserProfileRole;
 use sea_orm::DeriveActiveEnum;
 use serde::{Serialize, Deserialize};
-use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
+use sea_orm::prelude::*;
+use crate::entities::profile;
 
 #[derive(Debug, Deserialize)]
 pub struct BusinessSearch {
@@ -27,14 +27,10 @@ pub struct UserLogin {
 
 }
 
-pub struct ProfileSearch{
+#[derive(Debug, Deserialize)]
+pub struct ProfileSearch {
     pub q: String,
-    pub directory_id: Uuid,
-    pub user_id: Uuid,
-    pub role: UserProfileRole,
-    pub status: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    // Add other fields as needed
 }
 
 #[derive(Debug, Deserialize)]
@@ -51,7 +47,7 @@ pub struct Directory {
 pub struct Listing {
     id: uuid::Uuid,
     directory_id: uuid::Uuid,
-    user_id: uuid::Uuid,
+    profile_id: uuid::Uuid,
     title: String,
     description: String,
     contact_info: String,
@@ -129,8 +125,8 @@ pub struct ListingUpdate {
     pub phone: Option<String>,
     pub website: Option<String>,
     pub contact_info: Option<String>,
+    pub profile_id: Option<Uuid>,
 }
-
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct AdPurchaseCreate {
@@ -161,4 +157,13 @@ pub struct UserProfileCreate {
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct UserProfileUpdate {
     pub role: UserProfileRole,
+}
+
+#[derive(Deserialize)]
+pub struct CreateProfileInput {
+    pub directory_id: Uuid,
+    pub profile_type: profile::ProfileType,
+    pub display_name: String,
+    pub contact_info: String,
+    pub business_details: Option<profile::BusinessDetails>,
 }

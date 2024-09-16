@@ -39,9 +39,8 @@ async fn main() {
         .allow_headers(Any);
 
     let app = Router::new()
-        .nest("/api", api::router())
-        .layer(cors)
-        .with_state(db);
+        .nest("/api", api::router(db.clone()))
+        .layer(cors);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
     println!("Listening on {}", addr);

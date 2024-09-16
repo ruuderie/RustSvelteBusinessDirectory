@@ -1,11 +1,11 @@
-use crate::entities::{user, user_profile, profile};
-use sea_orm::{EntityTrait, DatabaseConnection, QueryFilter, ColumnTrait};
 use axum::{
     middleware::Next,
     response::Response,
     http::StatusCode,
 };
-use crate::auth::{validate_jwt, Claims};
+use crate::auth::validate_jwt;
+use crate::entities::{user, user_profile, profile};
+use sea_orm::{EntityTrait, DatabaseConnection, QueryFilter, ColumnTrait};
 use uuid::Uuid;
 
 pub async fn auth_middleware<B>(
@@ -27,7 +27,6 @@ pub async fn auth_middleware<B>(
 
     // Fetch the user from the database
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| StatusCode::UNAUTHORIZED)?;
-    let directory_id = Uuid::parse_str(&claims.directory_id).map_err(|_| StatusCode::UNAUTHORIZED)?;
 
     let db = req.extensions().get::<DatabaseConnection>().unwrap().clone();
     let user = user::Entity::find()
@@ -46,8 +45,8 @@ pub async fn auth_middleware<B>(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let directory_ids: Vec<Uuid> = user_profiles
-        .into_iter()
-        .map(|(_, profile)| profile.directory_id)
+        .iter()
+        .filter_map(|(_, profiles)| profiles.first().map(|p| p.directory_id))
         .collect();
 
     // Attach user and directory_ids to request extensions

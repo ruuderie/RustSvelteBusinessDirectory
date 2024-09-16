@@ -52,7 +52,7 @@ impl Related<super::profile::Entity> for Entity {
 
 impl ActiveModelBehavior for ActiveModel {}
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, DeriveActiveEnum)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, DeriveActiveEnum, EnumIter)]
 #[sea_orm(rs_type = "String", db_type = "String(Some(20))")]
 pub enum UserProfileRole {
     #[sea_orm(string_value = "Owner")]

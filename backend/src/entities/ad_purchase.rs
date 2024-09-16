@@ -2,9 +2,10 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
+/* 
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
-
+*/
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "ad_purchase")]
 pub struct Model {
@@ -21,8 +22,13 @@ pub struct Model {
 }
 
 
-#[derive(Copy, Clone, Debug, EnumIter)]
+#[derive(Copy, Clone, Debug, EnumIter, PartialEq, Eq, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(
+        belongs_to = "crate::entities::profile::Entity",
+        from = "Column::ProfileId",
+        to = "crate::entities::profile::Column::Id"
+    )]
     Profile,
     /*AdPlacement,*/
 }
@@ -37,24 +43,6 @@ pub enum AdStatus {
     Expired,
     #[sea_orm(string_value = "cancelled")]
     Cancelled,
-}
-
-impl RelationTrait for Relation {
-
-    fn def(&self) -> RelationDef {
-        match self {
-            Self::Profile => Entity::belongs_to(crate::entities::profile::Entity)
-                .from(Column::ProfileId)
-                .to(crate::entities::profile::Column::Id)
-                .into(),
-                /*
-            Self::AdPlacement => Entity::belongs_to(crate::entities::ad_placement::Entity)
-                .from(Column::AdPlacementId)
-                .to(crate::entities::ad_placement::Column::Id)
-                .into(),
-                */
-        }
-    }
 }
 
 impl Related<crate::entities::profile::Entity> for Entity {
