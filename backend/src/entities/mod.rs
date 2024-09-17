@@ -1,8 +1,19 @@
 pub mod user;
 pub mod profile;
-pub mod user_profile;
+pub mod user_account;
+pub mod template;
+pub mod category;
+pub mod account;
+pub mod template;
+pub mod category_closure;
+pub mod directory_specific_service;
+pub mod directory_type;
+pub mod shared_category;
+pub mod shared_service;
+pub mod user_service;
 pub mod ad_placement; 
 pub mod ad_purchase;
 pub mod directory;
 pub mod listing;
+pub mod listing_attribute;
 

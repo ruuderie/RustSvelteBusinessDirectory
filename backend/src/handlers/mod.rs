@@ -1,7 +1,11 @@
-pub mod ad_placements;
 pub mod ad_purchases;
+pub mod accounts;
+pub mod categories;
+pub mod directories;
+pub mod templates;
+pub mod directory_types;
 pub mod listings;
 pub mod profiles;
-pub mod user_profiles;
+pub mod user_accounts;
 pub mod users;
 pub mod admin;

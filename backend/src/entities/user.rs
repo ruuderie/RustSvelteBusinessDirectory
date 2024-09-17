@@ -1,7 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 use uuid::Uuid;
+use chrono::{DateTime, Utc};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "user")]
@@ -12,36 +12,31 @@ pub struct Model {
     pub email: String,
     pub password_hash: String,
     pub is_admin: bool,
+    pub is_active: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter)]
 pub enum Relation {
-    UserProfile,
+    UserAccount,
 }
 
 impl RelationTrait for Relation {
     fn def(&self) -> RelationDef {
         match self {
-            Self::UserProfile => Entity::has_many(crate::entities::user_profile::Entity).into(),
+            Self::UserAccount => Entity::has_many(super::user_account::Entity).into(),
         }
     }
 }
 
-impl Related<crate::entities::user_profile::Entity> for Entity {
+impl Related<super::account::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::UserProfile.def()
-    }
-}
-
-impl Related<crate::entities::profile::Entity> for Entity {
-    fn to() -> RelationDef {
-        crate::entities::user_profile::Relation::Profile.def()
+        super::user_account::Relation::Account.def()
     }
 
     fn via() -> Option<RelationDef> {
-        Some(crate::entities::user_profile::Relation::User.def().rev())
+        Some(super::user_account::Relation::User.def().rev())
     }
 }
 

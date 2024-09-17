@@ -1,70 +1,108 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
-use crate::entities::directory;
-use crate::entities::profile;
+use rust_decimal::Decimal;
 
-#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "listing")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
     pub profile_id: Uuid,
-    pub directory_id: Uuid,  // Add this field
+    pub directory_id: Uuid,
+    pub category_id: Uuid,
     pub title: String,
     pub description: String,
-    pub category: String,
-    pub address: String,
-    pub phone: String,
-    pub website: String,
-    pub contact_info: String,
-    pub status: ListingStatus,
+    pub listing_type: String,
+    pub price: Option<Decimal>,
+    pub price_type: Option<String>,
+    pub country: String,
+    pub state: String,
+    pub city: String,
+    pub neighborhood: Option<String>,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
+    pub additional_info: Value,
+    pub status: String,
+    pub is_featured: bool,
+    pub is_based_on_template: bool,
+    pub based_on_template_id: Option<Uuid>,
+    pub is_ad_placement: bool,
+    pub is_active: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, DeriveActiveEnum, Serialize, Deserialize, EnumIter)]
-#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "listing_status")]
-pub enum ListingStatus {
-    #[sea_orm(string_value = "pending")]
-    Pending,
-    #[sea_orm(string_value = "approved")]
-    Approved,
-    #[sea_orm(string_value = "rejected")]
-    Rejected,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter)]
 pub enum Relation {
     Profile,
     Directory,
+    Category,
+    BasedOnTemplate,
+    ListingAttribute,
+    AdPurchase,
 }
 
 impl RelationTrait for Relation {
     fn def(&self) -> RelationDef {
         match self {
-            Self::Profile => Entity::belongs_to(profile::Entity)
+            Self::Profile => Entity::belongs_to(super::profile::Entity)
                 .from(Column::ProfileId)
-                .to(profile::Column::Id)
+                .to(super::profile::Column::Id)
                 .into(),
-            Self::Directory => Entity::belongs_to(directory::Entity)
+            Self::Directory => Entity::belongs_to(super::directory::Entity)
                 .from(Column::DirectoryId)
-                .to(directory::Column::Id)
+                .to(super::directory::Column::Id)
                 .into(),
+            Self::Category => Entity::belongs_to(super::category::Entity)
+                .from(Column::CategoryId)
+                .to(super::category::Column::Id)
+                .into(),
+            Self::BasedOnTemplate => Entity::belongs_to(super::template::Entity)
+                .from(Column::BasedOnTemplateId)
+                .to(super::template::Column::Id)
+                .into(),
+            Self::ListingAttribute => Entity::has_many(super::listing_attribute::Entity).into(),
+            Self::AdPurchase => Entity::has_many(super::ad_purchase::Entity).into(),
         }
     }
 }
 
-impl Related<profile::Entity> for Entity {
+impl Related<super::profile::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Profile.def()
     }
 }
 
-impl Related<directory::Entity> for Entity {
+impl Related<super::directory::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Directory.def()
+    }
+}
+
+impl Related<super::category::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Category.def()
+    }
+}
+
+impl Related<super::template::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::BasedOnTemplate.def()
+    }
+}
+
+impl Related<super::listing_attribute::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ListingAttribute.def()
+    }
+}
+
+impl Related<super::ad_purchase::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::AdPurchase.def()
     }
 }
 
