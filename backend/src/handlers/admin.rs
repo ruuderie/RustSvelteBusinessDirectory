@@ -1,12 +1,35 @@
-use crate::entities::{user, directory, listing, ad_purchase, profile, ad_placement};
+use crate::entities::{user, directory, listing, ad_purchase, profile};
 use axum::{
     extract::{Extension, Json, Path, State},
     http::StatusCode,
     response::IntoResponse,
 };
-use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, Set, ActiveModelTrait, PaginatorTrait, QuerySelect, QueryTrait};
+use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, Set, ActiveModelTrait, PaginatorTrait};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use crate::models::listing::ListingStatus;
+use crate::models::ad_purchase::AdStatus;
+
+#[derive(Deserialize)]
+pub struct UpdateUserInput {
+    username: Option<String>,
+    email: Option<String>,
+}
+#[derive(Serialize)]
+pub struct DirectoryStats {
+    directory_id: Uuid,
+    name: String,
+    profile_count: u64,
+    listing_count: u64,
+    ad_purchase_count: u64,
+}
+
+#[derive(Serialize)]
+pub struct AdPurchaseStats {
+    total_purchases: i64,
+    active_purchases: i64,
+    total_revenue: f64,
+}
 
 pub async fn list_users(
     State(db): State<DatabaseConnection>,
@@ -42,11 +65,7 @@ pub async fn get_user(
     Ok(Json(user))
 }
 
-#[derive(Deserialize)]
-pub struct UpdateUserInput {
-    username: Option<String>,
-    email: Option<String>,
-}
+
 
 pub async fn update_user(
     State(db): State<DatabaseConnection>,
@@ -117,15 +136,6 @@ pub async fn toggle_admin(
     Ok(Json(updated_user))
 }
 
-#[derive(Serialize)]
-pub struct DirectoryStats {
-    directory_id: Uuid,
-    name: String,
-    profile_count: u64,
-    listing_count: u64,
-    ad_placement_count: u64,
-    ad_purchase_count: u64,
-}
 
 pub async fn get_all_directory_stats(
     State(db): State<DatabaseConnection>,
@@ -151,20 +161,9 @@ pub async fn get_all_directory_stats(
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-        let ad_placement_count = ad_placement::Entity::find()
-            .filter(ad_placement::Column::DirectoryId.eq(dir.id))
-            .count(&db)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
         let ad_purchase_count = ad_purchase::Entity::find()
-            .filter(ad_purchase::Column::AdPlacementId.in_subquery(
-                ad_placement::Entity::find()
-                    .select_only()
-                    .column(ad_placement::Column::Id)
-                    .filter(ad_placement::Column::DirectoryId.eq(dir.id))
-                    .into_query()
-            ))
+            .inner_join(profile::Entity)
+            .filter(profile::Column::DirectoryId.eq(dir.id))
             .count(&db)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -174,7 +173,6 @@ pub async fn get_all_directory_stats(
             name: dir.name,
             profile_count,
             listing_count,
-            ad_placement_count,
             ad_purchase_count,
         });
     }
@@ -209,20 +207,11 @@ pub async fn get_directory_stats(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let ad_placement_count = ad_placement::Entity::find()
-        .filter(ad_placement::Column::DirectoryId.eq(directory_id))
-        .count(&db)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    // filter by profile.directory id
     let ad_purchase_count = ad_purchase::Entity::find()
-        .filter(ad_purchase::Column::AdPlacementId.in_subquery(
-            ad_placement::Entity::find()
-                .select_only()
-                .column(ad_placement::Column::Id)
-                .filter(ad_placement::Column::DirectoryId.eq(directory_id))
-                .into_query()
-        ))
+        .inner_join(profile::Entity)
+        .filter(profile::Column::DirectoryId.eq(directory_id))
         .count(&db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -232,7 +221,6 @@ pub async fn get_directory_stats(
         name: directory.name,
         profile_count,
         listing_count,
-        ad_placement_count,
         ad_purchase_count,
     };
 
@@ -248,7 +236,7 @@ pub async fn list_pending_listings(
     }
 
     let pending_listings = listing::Entity::find()
-        .filter(listing::Column::Status.eq(listing::ListingStatus::Pending))
+        .filter(listing::Column::Status.eq(ListingStatus::Pending))
         .all(&db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -272,7 +260,7 @@ pub async fn approve_listing(
         .ok_or(StatusCode::NOT_FOUND)?
         .into();
 
-    listing.status = Set(listing::ListingStatus::Approved);
+    listing.status = Set(ListingStatus::Approved.to_string());
 
     let updated_listing = listing.update(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -295,18 +283,11 @@ pub async fn reject_listing(
         .ok_or(StatusCode::NOT_FOUND)?
         .into();
 
-    listing.status = Set(listing::ListingStatus::Rejected);
+    listing.status = Set(ListingStatus::Rejected.to_string());
 
     let updated_listing = listing.update(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(updated_listing))
-}
-
-#[derive(Serialize)]
-pub struct AdPurchaseStats {
-    total_purchases: i64,
-    active_purchases: i64,
-    total_revenue: f64,
 }
 
 pub async fn get_ad_purchase_stats(
@@ -320,13 +301,13 @@ pub async fn get_ad_purchase_stats(
     let total_purchases = ad_purchase::Entity::find().count(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let active_purchases = ad_purchase::Entity::find()
-        .filter(ad_purchase::Column::Status.eq(ad_purchase::AdStatus::Active))
+        .filter(ad_purchase::Column::Status.eq(AdStatus::Active))
         .count(&db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let total_revenue = ad_purchase::Entity::find()
-        .filter(ad_purchase::Column::Status.eq(ad_purchase::AdStatus::Active))
+        .filter(ad_purchase::Column::Status.eq(AdStatus::Active))
         .all(&db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -351,7 +332,7 @@ pub async fn list_active_ad_purchases(
     }
 
     let active_purchases = ad_purchase::Entity::find()
-        .filter(ad_purchase::Column::Status.eq(ad_purchase::AdStatus::Active))
+        .filter(ad_purchase::Column::Status.eq(AdStatus::Active))
         .all(&db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -375,7 +356,7 @@ pub async fn cancel_ad_purchase(
         .ok_or(StatusCode::NOT_FOUND)?
         .into();
 
-    purchase.status = Set(ad_purchase::AdStatus::Cancelled);
+    purchase.status = Set(AdStatus::Cancelled.to_string());
 
     let updated_purchase = purchase.update(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 

@@ -7,8 +7,8 @@ use chrono::{DateTime, Utc};
 #[sea_orm(table_name = "user_account")]
 pub struct Model {
     #[sea_orm(primary_key)]
+    pub id: Uuid,
     pub user_id: Uuid,
-    #[sea_orm(primary_key)]
     pub account_id: Uuid,
     pub role: UserRole,
     pub is_active: bool,

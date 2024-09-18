@@ -4,6 +4,8 @@ use serde_json::Value;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use strum_macros::{EnumString, Display};
+use crate::entities::listing;
+use crate::entities::listing::Relation::ListingAttribute;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "listing_attribute")]
@@ -18,7 +20,7 @@ pub struct Model {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize, EnumString, Display)]
+#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize, EnumString)]
 #[sea_orm(rs_type = "String", db_type = "String(Some(50))")]
 pub enum AttributeType {
     #[sea_orm(string_value = "ServiceDetail")]
@@ -29,13 +31,23 @@ pub enum AttributeType {
     EventDetail,
     #[sea_orm(string_value = "Location")]
     Location,
-    #[sea_orm(string_value = "Availability")]
-    Availability,
+    #[sea_orm(string_value = "BusinessHours")]
+    BusinessHours,
     #[sea_orm(string_value = "Custom")]
     Custom,
+    #[sea_orm(string_value = "Fees")]
+    Fees,
+    #[sea_orm(string_value = "Payment")]
+    Payment,
+    #[sea_orm(string_value = "Media")]
+    Media,
+    #[sea_orm(string_value = "Amenity")]
+    Amenity,
+    #[sea_orm(string_value = "Tag")]
+    Tag,
 }
 
-#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize, EnumString, Display)]
+#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize, EnumString)]
 #[sea_orm(rs_type = "String", db_type = "String(Some(50))")]
 pub enum AttributeKey {
     // Service-related keys
@@ -112,6 +124,7 @@ impl ActiveModelBehavior for ActiveModel {}
 pub mod listing_helpers {
     use super::*;
     use sea_orm::ActiveValue::Set;
+    use crate::entities::listing::Entity as Listing;
 
     pub async fn add_attribute(
         db: &DatabaseConnection,
@@ -130,8 +143,8 @@ pub mod listing_helpers {
             updated_at: Set(Utc::now()),
         };
 
-        ListingAttribute::insert(attribute)
-            .exec(db)
+        Entity::insert(attribute)
+            .exec_with_returning(db)
             .await
     }
 
@@ -140,7 +153,7 @@ pub mod listing_helpers {
         listing_id: Uuid,
         attribute_type: Option<AttributeType>,
     ) -> Result<Vec<Model>, DbErr> {
-        let mut query = ListingAttribute::find()
+        let mut query = Entity::find()
             .filter(Column::ListingId.eq(listing_id));
 
         if let Some(attr_type) = attribute_type {
@@ -155,9 +168,9 @@ pub mod listing_helpers {
         attribute_type: AttributeType,
         attribute_key: AttributeKey,
         value: &str,
-    ) -> Result<Vec<(listing::Model, Model)>, DbErr> {
+    ) -> Result<Vec<(listing::Model, Option<Model>)>, DbErr> {
         Listing::find()
-            .inner_join(ListingAttribute)
+            .find_also_related(Entity)
             .filter(Column::AttributeType.eq(attribute_type))
             .filter(Column::AttributeKey.eq(attribute_key))
             .filter(Column::Value.contains(value))

@@ -1,9 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
-use rust_decimal::Decimal;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "template")]
@@ -15,9 +13,7 @@ pub struct Model {
     pub name: String,
     pub description: String,
     pub template_type: String,
-    pub suggested_price: Option<Decimal>,
     pub is_active: bool,
-    pub attributes: Value,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

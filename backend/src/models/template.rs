@@ -1,0 +1,42 @@
+use chrono::{Utc, DateTime, Duration};
+use uuid::Uuid;
+use crate::entities::user_account::UserRole;
+use sea_orm::DeriveActiveEnum;
+use serde::{Serialize, Deserialize};
+use sea_orm::prelude::*;
+
+#[derive(Debug, Deserialize)]
+pub struct TemplateModel {
+    pub id: Uuid,
+    pub directory_id: Uuid,
+    pub category_id: Uuid,
+    pub name: String,
+    pub description: String,
+    pub template_type: String,
+    pub is_active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateTemplate {
+    pub name: String,
+    pub directory_id: Uuid,
+    pub category_id: Uuid,
+    pub description: String,
+    pub template_type: String,
+    pub is_active: bool,
+    pub attributes: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateTemplate {
+    pub id: Uuid,
+    pub name: String,
+    pub directory_id: Uuid,
+    pub description: String,
+    pub template_type: String,
+    pub is_active: bool,
+    pub attributes: String,
+}
+

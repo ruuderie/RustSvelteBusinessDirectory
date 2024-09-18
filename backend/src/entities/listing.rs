@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
-use rust_decimal::Decimal;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "listing")]
@@ -16,7 +15,7 @@ pub struct Model {
     pub title: String,
     pub description: String,
     pub listing_type: String,
-    pub price: Option<Decimal>,
+    pub price: Option<i64>,
     pub price_type: Option<String>,
     pub country: String,
     pub state: String,

@@ -12,16 +12,52 @@ use chrono::Utc;
 use crate::entities::{
     listing,
     listing_attribute,
+    listing_attribute as template_attribute,
     profile,
     template,
     user,
-    user_profile
+    user_account,
+    listing::Entity as Listing,
 };
 use crate::models::{
     template::{TemplateModel, CreateTemplate, UpdateTemplate},
-    listing::{ListingModel, ListingCreate}, 
+    listing::{ListingModel, ListingCreate, ListingStatus}, 
     listing_attribute::{ListingAttributeModel, CreateListingAttribute}
+    
 };
+
+impl From<template::Model> for TemplateModel {
+    fn from(model: template::Model) -> Self {
+        TemplateModel {
+            id: model.id,
+            directory_id: model.directory_id,
+            name: model.name,
+            description: model.description,
+            template_type: model.template_type,
+            is_active: model.is_active,
+            category_id: model.category_id,
+            created_at: model.created_at,
+            updated_at: model.updated_at,
+
+        }
+    }
+}
+
+impl From<listing::Model> for ListingModel {
+    fn from(model: listing::Model) -> Self {
+        ListingModel {
+            id: model.id,
+            profile_id: model.profile_id,
+            directory_id: model.directory_id,
+            title: model.title,
+            description: model.description,
+            contact_info: None,
+            status: ListingStatus::from_str(&model.status).unwrap_or(ListingStatus::Pending),
+            created_at: model.created_at,
+            updated_at: model.updated_at,
+        }
+    }
+}
 
 pub async fn get_templates(
     Path(directory_id): Path<Uuid>,
@@ -40,7 +76,7 @@ pub async fn get_templates(
 
     let template_models: Vec<TemplateModel> = templates
         .into_iter()
-        .map(TemplateModel::from)
+        .map(Into::<TemplateModel>::into)
         .collect();
 
     Ok(Json(template_models))
@@ -81,9 +117,7 @@ pub async fn create_template(
         name: Set(payload.name),
         description: Set(payload.description),
         template_type: Set(payload.template_type),
-        suggested_price: Set(payload.suggested_price),
         is_active: Set(payload.is_active),
-        attributes: Set(payload.attributes),
         created_at: Set(Utc::now()),
         updated_at: Set(Utc::now()),
     };
@@ -108,7 +142,7 @@ pub async fn update_template(
     Json(payload): Json<UpdateTemplate>,
     State(db): State<DatabaseConnection>,
 ) -> Result<Json<TemplateModel>, (StatusCode, Json<serde_json::Value>)> {
-    let template: template::ActiveModel = template::Entity::find()
+    let mut template: template::ActiveModel = template::Entity::find()
         .filter(template::Column::Id.eq(template_id))
         .filter(template::Column::DirectoryId.eq(directory_id))
         .one(&db)
@@ -118,15 +152,15 @@ pub async fn update_template(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({"error": "Failed to fetch template for update", "details": err.to_string()})),
             )
-        })?
+        })
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(json!({"error": "Template not found"}))))?
         .into();
 
     // Update fields based on the payload
-    if let Some(name) = payload.name {
+    if let name = payload.name {
         template.name = Set(name);
     }
-    if let Some(description) = payload.description {
+    if let description = payload.description {
         template.description = Set(description);
     }
     // ... update other fields similarly
@@ -193,11 +227,11 @@ pub async fn create_listing_from_template(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({"error": "Failed to fetch template", "details": err.to_string()})),
             )
-        })?
+        })
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(json!({"error": "Template not found"}))))?;
 
-    let template_attributes = ListingAttribute::find()
-        .filter(listing_attribute::Column::TemplateId.eq(template_id))
+    let template_attributes = template_attribute::Entity::find()
+        .filter(template_attribute::Column::TemplateId.eq(template_id))
         .all(&txn)
         .await
         .map_err(|err| {
@@ -208,8 +242,8 @@ pub async fn create_listing_from_template(
         })?;
 
     // Fetch the user's profiles
-    let user_profiles = UserAccount::find()
-        .filter(user_profile::Column::UserId.eq(current_user.id))
+    let user_accounts = user_account::Entity::find()
+        .filter(user_account::Column::UserId.eq(current_user.id))
         .all(&txn)
         .await
         .map_err(|err| {
@@ -234,11 +268,11 @@ pub async fn create_listing_from_template(
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(json!({"error": "Profile not found"}))))?;
 
     // Check if the user is associated with the profile
-    let user_profile_exists = user_profiles
+    let user_account_exists = user_accounts
         .iter()
-        .any(|up| up.profile_id == profile.id);
+        .any(|ua| ua.account_id == profile.id);
 
-    if !user_profile_exists {
+    if !user_account_exists {
         return Err((StatusCode::FORBIDDEN, Json(json!({"error": "User not associated with this profile"}))));
     }
 
@@ -248,11 +282,11 @@ pub async fn create_listing_from_template(
         profile_id: Set(profile.id),
         directory_id: Set(directory_id),
         category_id: Set(template.category_id), // Inherit category from template
-        title: Set(input.title.unwrap_or_else(|| template.name.clone())), // Use template name if title not provided
-        description: Set(input.description.unwrap_or_else(|| template.description.clone())),
+        title: Set(input.title.unwrap_or(template.name.clone())), // Use template name if title not provided
+        description: Set(input.description.unwrap_or(template.description.clone())),
         listing_type: Set(template.template_type.clone()),
-        price: Set(input.price.or_else(|| template.suggested_price)), 
-        status: Set(listing::ListingStatus::Pending.to_string()), 
+        price: Set(input.price.or_else(|| template.suggested_price.map(|p| p as i64))),
+        status: Set(ListingStatus::Pending.to_string()), 
         is_based_on_template: Set(true),
         based_on_template_id: Set(Some(template_id)),
         price_type: Set(input.price_type.unwrap_or_else(|| "fixed".to_string())),
@@ -282,7 +316,6 @@ pub async fn create_listing_from_template(
         let new_attr = listing_attribute::ActiveModel {
             id: Set(Uuid::new_v4()),
             listing_id: Set(inserted_listing.id),
-            template_id: Set(None), 
             attribute_type: Set(attr.attribute_type),
             attribute_key: Set(attr.attribute_key),
             value: Set(attr.value.clone()), 
@@ -304,8 +337,8 @@ pub async fn create_listing_from_template(
         )
     })?;
 
-    // Convert InsertResult to Model and return
-    let inserted_listing_model = Listing::find_by_id(inserted_listing.last_insert_id)
+    // Use the id field directly from the inserted_listing
+    let inserted_listing_model = Listing::find_by_id(inserted_listing.id)
         .one(&db)
         .await
         .map_err(|err| {

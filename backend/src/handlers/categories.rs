@@ -3,9 +3,10 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use sea_orm::{DatabaseConnection, EntityTrait};
+use sea_orm::{DatabaseConnection, EntityTrait, Set, InsertResult, ActiveModelTrait, DbErr};
 use serde_json::json;
 use uuid::Uuid;
+use chrono::{DateTime, Utc};
 
 use crate::entities::category; 
 use crate::models::category::{CategoryModel, CreateCategory, UpdateCategory}; 
@@ -60,23 +61,39 @@ pub async fn create_category(
     Json(payload): Json<CreateCategory>, 
     State(db): State<DatabaseConnection>,
 ) -> Result<Json<CategoryModel>, (StatusCode, Json<serde_json::Value>)> {
-    // Implement logic to create a new category based on the payload
-    // ...
-
     // Example (replace with your actual implementation)
     let new_category = category::ActiveModel {
         id: Set(Uuid::new_v4()),
-        // ... set other fields based on the payload ...
+        directory_type_id: Set(payload.directory_type_id),
+        parent_category_id: Set(payload.parent_category_id),
+        name: Set(payload.name),
+        description: Set(payload.description),
+        is_custom: Set(payload.is_custom),
+        is_active: Set(payload.is_active),
         created_at: Set(Utc::now()),
         updated_at: Set(Utc::now()),
     };
 
-    let category = new_category.insert(&db).await.map_err(|err| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "Failed to create category", "details": err.to_string()})),
-        )
-    })?;
+    let insert_result = category::Entity::insert(new_category)
+        .exec(&db)
+        .await
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to create category", "details": err.to_string()})),
+            )
+        })?;
+
+    let category = category::Entity::find_by_id(insert_result.last_insert_id)
+        .one(&db)
+        .await
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to fetch created category", "details": err.to_string()})),
+            )
+        })?
+        .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Created category not found"}))))?;
 
     Ok(Json(CategoryModel::from(category)))
 }

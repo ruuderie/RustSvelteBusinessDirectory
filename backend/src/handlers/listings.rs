@@ -1,14 +1,13 @@
 use crate::entities::{
-    ad_placement::{self, Entity as AdPlacement},
     ad_purchase::{self, Entity as AdPurchase},
     listing::{self, Entity as Listing},
     profile::{self, Entity as Profile},
     user::{self, Entity as User},
-    user_profile::{self, Entity as UserProfile},
+    user_account::{self, Entity as UserAccount},
     template::{self, Entity as Template},
     listing_attribute::{self, Entity as ListingAttribute}
 };
-use crate::models::{ListingCreate, ListingUpdate};
+use crate::models::listing::{ListingCreate, ListingUpdate, ListingStatus};
 use sea_orm::{
     DatabaseConnection, EntityTrait, Set, QueryFilter, ColumnTrait, ActiveModelTrait, TransactionTrait
 };
@@ -49,13 +48,13 @@ pub async fn get_listings(
 
 pub async fn get_listing_by_id(
     State(db): State<DatabaseConnection>,
-    Extension(current_user): Extension<user_profile::Model>, 
+    Extension(current_user): Extension<user_account::Model>, 
     Path(id): Path<Uuid>,
 ) -> Result<Json<listing::Model>, axum::http::StatusCode> {
     // Fetch the listing by ID and ensure it belongs to the same directory
     let listing = Listing::find()
         .filter(listing::Column::Id.eq(id))
-        // .filter(listing::Column::DirectoryId.eq(current_user.directory_id)) // Assuming user_profile has directory_id
+        // .filter(listing::Column::DirectoryId.eq(current_user.directory_id)) // Assuming user_account has directory_id
         .one(&db)
         .await
         .map_err(|err| {
@@ -79,8 +78,8 @@ pub async fn create_listing(
     })?;
 
     // Fetch the user's profiles
-    let user_profiles = UserProfile::find()
-        .filter(user_profile::Column::UserId.eq(current_user.id))
+    let user_accounts = UserAccount::find()
+        .filter(user_account::Column::UserId.eq(current_user.id))
         .all(&txn)
         .await
         .map_err(|err| {
@@ -101,11 +100,11 @@ pub async fn create_listing(
         .ok_or(StatusCode::NOT_FOUND)?;
 
     // Check if the user is associated with the profile
-    let user_profile_exists = user_profiles
+    let user_account_exists = user_accounts
         .iter()
         .any(|up| up.profile_id == profile.id);
 
-    if !user_profile_exists {
+    if !user_account_exists {
         return Err(StatusCode::FORBIDDEN);
     }
 
@@ -127,7 +126,7 @@ pub async fn create_listing(
         latitude: Set(input.latitude),
         longitude: Set(input.longitude),
         additional_info: Set(input.additional_info),
-        status: Set(listing::ListingStatus::Pending.to_string()), // Assuming you have an enum ListingStatus
+        status: Set(ListingStatus::Pending.to_string()), // Assuming you have an enum ListingStatus
         is_featured: Set(input.is_featured),
         is_based_on_template: Set(input.template_id.is_some()),
         based_on_template_id: Set(input.template_id),
@@ -222,17 +221,17 @@ pub async fn update_listing(
         .ok_or(axum::http::StatusCode::NOT_FOUND)?;
 
     // Check if the user is associated with the profile
-    let user_profile_exists = UserProfile::find()
-        .filter(user_profile::Column::UserId.eq(current_user.id))
-        .filter(user_profile::Column::ProfileId.eq(profile.id))
+    let user_account_exists = UserAccount::find()
+        .filter(user_account::Column::UserId.eq(current_user.id))
+        .filter(user_account::Column::ProfileId.eq(profile.id))
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error checking user_profile association: {:?}", err);
+            eprintln!("Error checking user_account association: {:?}", err);
             axum::http::StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    if user_profile_exists.is_none() {
+    if user_account_exists.is_none() {
         return Err(axum::http::StatusCode::FORBIDDEN);
     }
 
@@ -332,17 +331,17 @@ pub async fn delete_listing(
         .ok_or(axum::http::StatusCode::NOT_FOUND)?;
 
     // Check if the user is associated with the profile
-    let user_profile_exists = UserProfile::find()
-        .filter(user_profile::Column::UserId.eq(current_user.id))
-        .filter(user_profile::Column::ProfileId.eq(profile.id))
+    let user_account_exists = UserAccount::find()
+        .filter(user_account::Column::UserId.eq(current_user.id))
+        .filter(user_account::Column::ProfileId.eq(profile.id))
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error checking user_profile association: {:?}", err);
+            eprintln!("Error checking user_account association: {:?}", err);
             axum::http::StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    if user_profile_exists.is_none() {
+    if user_account_exists.is_none() {
         return Err(axum::http::StatusCode::FORBIDDEN);
     }
 

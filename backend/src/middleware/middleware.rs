@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
 };
 use crate::auth::validate_jwt;
-use crate::entities::{user, user_profile, profile};
+use crate::entities::{user, user_account, profile, account};
 use sea_orm::{EntityTrait, DatabaseConnection, QueryFilter, ColumnTrait};
 use uuid::Uuid;
 
@@ -37,16 +37,17 @@ pub async fn auth_middleware<B>(
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
     // Fetch the user's profiles and their associated directories
-    let user_profiles = user_profile::Entity::find()
-        .filter(user_profile::Column::UserId.eq(user.id))
-        .find_with_related(profile::Entity)
+    let user_accounts = user_account::Entity::find()
+        .filter(user_account::Column::UserId.eq(user.id))
+        .find_with_related(account::Entity)
         .all(&db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let directory_ids: Vec<Uuid> = user_profiles
+    let directory_ids: Vec<Uuid> = user_accounts
         .iter()
-        .filter_map(|(_, profiles)| profiles.first().map(|p| p.directory_id))
+        .filter_map(|(_, accounts)| accounts.first())
+        .filter_map(|account| Some(account.directory_id))
         .collect();
 
     // Attach user and directory_ids to request extensions

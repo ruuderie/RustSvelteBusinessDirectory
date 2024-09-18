@@ -3,7 +3,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use sea_orm::{DatabaseConnection, EntityTrait};
+use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -25,7 +25,7 @@ pub async fn get_directories(
 
     let directory_models: Vec<DirectoryModel> = directories
         .into_iter()
-        .map(DirectoryModel::from)
+        .map(Into::<DirectoryModel>::into)
         .collect();
 
     Ok(Json(directory_models))
@@ -70,7 +70,7 @@ pub async fn get_directories_by_type(
 
     let directory_models: Vec<DirectoryModel> = directories
         .into_iter()
-        .map(DirectoryModel::from)
+        .map(Into::<DirectoryModel>::into)
         .collect();
 
     Ok(Json(directory_models))

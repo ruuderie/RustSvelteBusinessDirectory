@@ -3,10 +3,10 @@ mod auth;
 mod db;
 mod entities;
 mod migration;
-mod models;
 mod middleware;
 mod handlers;
 mod admin;
+mod models;
 
 use axum::{http, Router, 
     middleware::{from_fn_with_state, from_fn}

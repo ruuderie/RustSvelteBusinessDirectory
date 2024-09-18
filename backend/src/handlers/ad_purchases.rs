@@ -6,13 +6,13 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use sea_orm::{
-    DatabaseConnection, EntityTrait, QueryFilter, Set, ActiveModelTrait, ColumnTrait,
-    InsertResult,
+    DatabaseConnection, EntityTrait, QueryFilter, Set, ColumnTrait,
+    InsertResult,UpdateResult
 };
 use crate::entities::{
-    ad_purchase, profile, user_profile, user, ad_purchase::AdStatus, ad_placement,
+    ad_purchase, profile, user_account, user,
 };
-use crate::models::AdPurchaseCreate;
+use crate::models::ad_purchase::*;
 use uuid::Uuid;
 use chrono::Utc;
 
@@ -35,41 +35,28 @@ pub async fn create_ad_purchase(
         .ok_or(StatusCode::NOT_FOUND)?;
 
     // Check if the user is associated with the profile
-    let user_profile_exists = user_profile::Entity::find()
-        .filter(user_profile::Column::UserId.eq(current_user.id))
-        .filter(user_profile::Column::ProfileId.eq(profile.id))
+    let user_account_exists = user_account::Entity::find()
+        .filter(user_account::Column::UserId.eq(current_user.id))
+        .filter(user_account::Column::AccountId.eq(profile.account_id))
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error checking user_profile association: {:?}", err);
+            eprintln!("Error checking user_account association: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    if user_profile_exists.is_none() {
+    if user_account_exists.is_none() {
         return Err(StatusCode::FORBIDDEN);
     }
-
-    // Fetch the ad placement
-    let ad_placement = ad_placement::Entity::find()
-        .filter(ad_placement::Column::Id.eq(input.ad_placement_id))
-        .filter(ad_placement::Column::DirectoryId.is_in(directory_ids))
-        .one(&db)
-        .await
-        .map_err(|err| {
-            eprintln!("Error fetching ad placement: {:?}", err);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .ok_or(StatusCode::NOT_FOUND)?;
     
     // Create the ad purchase
     let new_ad_purchase = ad_purchase::ActiveModel {
         id: Set(Uuid::new_v4()),
         profile_id: Set(profile.id),
-        ad_placement_id: Set(ad_placement.id),
-        content: Set(input.content),
+        listing_id: Set(input.listing_id),
         start_date: Set(input.start_date),
         end_date: Set(input.end_date),
-        status: Set(AdStatus::Pending),
+        status: Set(AdStatus::Pending.to_string()),
         created_at: Set(Utc::now()),
         updated_at: Set(Utc::now()),
         price: Set(input.price),
@@ -125,6 +112,108 @@ pub async fn get_ad_purchases(
 
     Ok(Json(ad_purchases))
 }
+
+pub async fn update_ad_purchase(
+    State(db): State<DatabaseConnection>,
+    Extension(current_user): Extension<user::Model>,
+    Extension(directory_ids): Extension<Vec<Uuid>>,
+    Path(id): Path<Uuid>,
+    Json(input): Json<AdPurchaseUpdate>,
+) -> Result<impl IntoResponse, StatusCode> {
+    // Fetch the ad purchase
+    let ad_purchase = ad_purchase::Entity::find()
+        .filter(ad_purchase::Column::Id.eq(id))
+        .one(&db)
+        .await
+        .map_err(|err| {
+            eprintln!("Error fetching ad purchase: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    // Fetch the profile associated with the ad purchase
+    let profile = profile::Entity::find_by_id(ad_purchase.profile_id)
+        .one(&db)
+        .await
+        .map_err(|err| {
+            eprintln!("Error fetching profile: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    // Check directory isolation
+    if !directory_ids.contains(&profile.directory_id) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    // Update the ad purchase   
+    let updated_ad_purchase = ad_purchase::ActiveModel {
+        id: Set(ad_purchase.id),
+        profile_id: Set(ad_purchase.profile_id),
+        listing_id: Set(input.listing_id),
+        start_date: Set(input.start_date),
+        end_date: Set(input.end_date),
+        status: Set(AdStatus::Pending.to_string()), 
+        price: Set(input.price),
+        created_at: Set(ad_purchase.created_at),
+        updated_at: Set(Utc::now()),
+    };
+
+    let updated_model = ad_purchase::Entity::update(updated_ad_purchase)
+        .exec(&db)
+        .await
+        .map_err(|err| {
+            eprintln!("Error updating ad purchase: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(Json(updated_model))
+}
+
+pub async fn delete_ad_purchase(
+    State(db): State<DatabaseConnection>,
+    Extension(current_user): Extension<user::Model>,
+    Extension(directory_ids): Extension<Vec<Uuid>>,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, StatusCode> {
+    // Fetch the ad purchase
+    let ad_purchase = ad_purchase::Entity::find()
+        .filter(ad_purchase::Column::Id.eq(id))
+        .one(&db)
+        .await
+        .map_err(|err| {
+            eprintln!("Error fetching ad purchase: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    // Fetch the profile associated with the ad purchase
+    let profile = profile::Entity::find_by_id(ad_purchase.profile_id)
+        .one(&db)
+        .await
+        .map_err(|err| {
+            eprintln!("Error fetching profile: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    // Check directory isolation
+    if !directory_ids.contains(&profile.directory_id) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    // Delete the ad purchase
+    ad_purchase::Entity::delete_by_id(ad_purchase.id)
+        .exec(&db)
+        .await
+        .map_err(|err| {
+            eprintln!("Error deleting ad purchase: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 
 pub async fn get_ad_purchase_by_id(
     State(db): State<DatabaseConnection>,

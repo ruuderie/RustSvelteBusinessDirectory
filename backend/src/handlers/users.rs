@@ -1,16 +1,15 @@
 use crate::entities::{
-  ad_placement::{self, Entity as AdPlacement},
     ad_purchase::{self, Entity as AdPurchase},
     profile::{self, Entity as Profile},
     user::{self, Entity as User},
-    user_profile::{self, Entity as UserProfile},
+    user_account::{self, Entity as UserAccount},
 };
 use axum::{
     extract::{Extension, Json, State},
     http::StatusCode,
     response::IntoResponse,
 };
-use crate::models::{UserLogin, UserRegistration};
+use crate::models::user::{UserLogin, UserRegistration};
 use sea_orm::{DatabaseConnection, EntityTrait, Set, ColumnTrait, QueryFilter, ActiveModelTrait};
 use uuid::Uuid;
 use chrono::{Utc, Duration};
@@ -57,6 +56,7 @@ pub async fn register_user(
         email: Set(email.clone()),
         password_hash: Set(hashed_password),
         is_admin: Set(false),
+        is_active: Set(true),
         created_at: Set(Utc::now()),
         updated_at: Set(Utc::now()),
     };
@@ -82,6 +82,9 @@ pub async fn register_user(
         // Create a new Profile if not found
         let new_profile = profile::ActiveModel {
             id: Set(Uuid::new_v4()),
+            account_id: Set(profile.account_id),
+            additional_info: Set(None),
+            is_active: Set(true),
             directory_id: Set(directory_id),
             profile_type: Set(profile::ProfileType::Business), // Assuming it's a business profile
             display_name: Set(username),
@@ -102,16 +105,18 @@ pub async fn register_user(
         inserted_profile.id
     };
 
-    // Step 5: Create the UserProfile to link user and profile
-    let new_user_profile = user_profile::ActiveModel {
+    // Step 5: Create the UserAccount to link user and profile
+    let new_user_account = user_account::ActiveModel {
         id: Set(Uuid::new_v4()),
         user_id: Set(inserted_user.id),
-        profile_id: Set(profile_id),
-        role: Set(user_profile::UserProfileRole::Owner),
+        account_id: Set(profile.account_id),
+        role: Set(user_account::UserRole::Owner),
         created_at: Set(Utc::now()),
+        is_active: Set(true),
+        updated_at: Set(Utc::now()),
     };
 
-    new_user_profile.insert(&db).await.map_err(|err| {
+    new_user_account.insert(&db).await.map_err(|err| {
         eprintln!("Database error when creating user profile: {:?}", err);
         axum::http::StatusCode::INTERNAL_SERVER_ERROR
     })?;
@@ -146,8 +151,8 @@ pub async fn login_user(
         println!("User authenticated");
 
         // Fetch user's profile for the specified directory
-        let user_profile = user_profile::Entity::find()
-            .filter(user_profile::Column::UserId.eq(user.id))
+        let user_account = user_account::Entity::find()
+            .filter(user_account::Column::UserId.eq(user.id))
             .find_with_related(profile::Entity)
             .all(&db)
             .await
@@ -155,13 +160,13 @@ pub async fn login_user(
             .into_iter()
             .find(|(_, profiles)| profiles.first().map_or(false, |p| p.directory_id == login_data.directory_id));
 
-        if let Some((user_profile, profile)) = user_profile {
+        if let Some((user_account, profile)) = user_account {
             let profile = profile.first().unwrap(); // Safe because we checked in the find() above
             
             // Generate JWT including user_id, profile_id, and directory_id
             let claims = Claims {
                 sub: user.id.to_string(),
-                profile_id: user_profile.profile_id.to_string(),
+                profile_id: user_account.profile_id.to_string(),
                 directory_id: profile.directory_id.to_string(),
                 exp: (Utc::now() + Duration::hours(24)).timestamp() as usize,
             };
