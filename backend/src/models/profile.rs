@@ -13,6 +13,7 @@ pub struct ProfileSearch {
 }
 #[derive(Deserialize)]
 pub struct CreateProfileInput {
+    pub id: Uuid,
     pub directory_id: Uuid,
     pub profile_type: profile::ProfileType,
     pub display_name: String,
@@ -32,7 +33,7 @@ pub struct ProfileModel {
 
 #[derive(Deserialize)]
 pub struct UpdateProfileInput {
-    pub display_name: String,
-    pub contact_info: String,
+    pub display_name: Option<String>,
+    pub contact_info: Option<String>,
     pub business_details: Option<profile::BusinessDetails>,
 }

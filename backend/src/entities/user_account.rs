@@ -60,4 +60,15 @@ impl Related<super::account::Entity> for Entity {
     }
 }
 
+impl Related<super::profile::Entity> for Entity {
+    fn to() -> RelationDef {
+        // Define the relation via the Account entity
+        super::account::Relation::Profile.def()
+    }
+
+    fn via() -> Option<RelationDef> {
+        Some(Relation::Account.def())
+    }
+}
+
 impl ActiveModelBehavior for ActiveModel {}

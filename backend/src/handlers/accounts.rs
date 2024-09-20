@@ -34,6 +34,16 @@ pub struct AccountResponse {
     created_at: chrono::DateTime<Utc>,
 }
 
+impl Default for AccountResponse {
+    fn default() -> Self {
+        AccountResponse {
+            id: Uuid::nil(),
+            name: String::new(),
+            created_at: Utc::now(),
+        }
+    }
+}
+
 pub async fn create_account(
     State(db): State<DatabaseConnection>,
     Json(payload): Json<CreateAccountDto>,
@@ -53,9 +63,9 @@ pub async fn create_account(
                 name: payload.name,
                 created_at: Utc::now(),
             };
-            (StatusCode::CREATED, Json(Some(account_response)))
+            (StatusCode::CREATED, Json(account_response))
         }
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(None)),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(AccountResponse::default())),
     }
 }
 
@@ -70,10 +80,10 @@ pub async fn get_account(
                 name: account.name,
                 created_at: account.created_at,
             };
-            (StatusCode::OK, Json(Some(account_response)))
+            (StatusCode::OK, Json(account_response))
         }
-        Ok(None) => (StatusCode::NOT_FOUND, Json(None)),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(None)),
+        Ok(None) => (StatusCode::NOT_FOUND, Json(AccountResponse::default())),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(AccountResponse::default())),
     }
 }
 pub async fn get_accounts(
@@ -107,7 +117,8 @@ pub async fn update_account(
                 name: updated.name,
                 created_at: updated.created_at,
             };
-            (StatusCode::OK, Json(Some(account_response)))
+            
+            (StatusCode::OK, Json(()))
         }
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(())),
     }

@@ -86,7 +86,7 @@ pub async fn update_directory_type(
     Json(payload): Json<UpdateDirectoryType>,
     State(db): State<DatabaseConnection>,
 ) -> Result<Json<DirectoryTypeModel>, (StatusCode, Json<serde_json::Value>)> {
-    let directory_type: directory_type::ActiveModel = directory_type::Entity::find_by_id(directory_type_id)
+    let mut directory_type: directory_type::ActiveModel = directory_type::Entity::find_by_id(directory_type_id)
         .one(&db)
         .await
         .map_err(|err| {
@@ -99,10 +99,10 @@ pub async fn update_directory_type(
         .into();
 
     // Update fields based on the payload
-    if let Some(name) = payload.name {
+    if let name = payload.name {
         directory_type.name = Set(name);
     }
-    if let Some(description) = payload.description {
+    if let description = payload.description {
         directory_type.description = Set(description);
     }
     directory_type.updated_at = Set(Utc::now());

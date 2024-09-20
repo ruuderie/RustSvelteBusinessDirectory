@@ -50,7 +50,10 @@ pub fn admin_routes(db: DatabaseConnection) -> Router {
         // AdPurchase management
         .route("/ad-purchases", get(admin::list_ad_purchases)) 
         .route("/ad-purchases/:purchase_id", get(admin::get_ad_purchase).put(admin::update_ad_purchase).delete(admin::delete_ad_purchase))
-
+        // Template routes
+        .route("/templates", post(templates::create_template).get(templates::get_templates))
+        .route("/templates/:id", get(templates::get_template_by_id).put(templates::update_template).delete(templates::delete_template))
+        .route("/templates/:id/create_listing", post(templates::create_listing_from_template))
         // Statistics and reports
         .route("/statistics/users", get(admin::get_user_statistics))
         .route("/statistics/accounts", get(admin::get_account_statistics))

@@ -18,7 +18,7 @@ pub struct Model {
     pub business_address: Option<String>,
     pub business_phone: Option<String>,
     pub business_website: Option<String>,
-    pub additional_info: Value,
+    pub additional_info: Option<Value>,
     pub is_active: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

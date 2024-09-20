@@ -82,7 +82,7 @@ pub async fn register_user(
         // Create a new Profile if not found
         let new_profile = profile::ActiveModel {
             id: Set(Uuid::new_v4()),
-            account_id: Set(profile.account_id),
+            account_id: Set(profile.unwrap().account_id),
             additional_info: Set(None),
             is_active: Set(true),
             directory_id: Set(directory_id),
@@ -104,12 +104,12 @@ pub async fn register_user(
 
         inserted_profile.id
     };
-
+    let account_id = profile.as_ref().unwrap().account_id.clone();
     // Step 5: Create the UserAccount to link user and profile
     let new_user_account = user_account::ActiveModel {
         id: Set(Uuid::new_v4()),
         user_id: Set(inserted_user.id),
-        account_id: Set(profile.account_id),
+        account_id: Set(account_id),
         role: Set(user_account::UserRole::Owner),
         created_at: Set(Utc::now()),
         is_active: Set(true),
@@ -160,13 +160,13 @@ pub async fn login_user(
             .into_iter()
             .find(|(_, profiles)| profiles.first().map_or(false, |p| p.directory_id == login_data.directory_id));
 
-        if let Some((user_account, profile)) = user_account {
-            let profile = profile.first().unwrap(); // Safe because we checked in the find() above
+        if let Some((user_account, profiles)) = user_account {
+            let profile = profiles.first().unwrap(); // Safe because we checked in the find()
             
             // Generate JWT including user_id, profile_id, and directory_id
             let claims = Claims {
                 sub: user.id.to_string(),
-                profile_id: user_account.profile_id.to_string(),
+                profile_id: profile.id.to_string(),
                 directory_id: profile.directory_id.to_string(),
                 exp: (Utc::now() + Duration::hours(24)).timestamp() as usize,
             };

@@ -3,18 +3,20 @@ use axum::{
     http::StatusCode,
 };
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, Set, TransactionTrait,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, Set, TransactionTrait,IntoActiveModel
 };
 use serde_json::json;
 use uuid::Uuid;
 use chrono::Utc;
-
+use futures::TryFutureExt;
+use std::result::Result;
+use std::str::FromStr;
 use crate::entities::{
     listing,
     listing_attribute,
-    listing_attribute as template_attribute,
     profile,
     template,
+    template::Entity as Template, // Add this line
     user,
     user_account,
     listing::Entity as Listing,
@@ -22,42 +24,9 @@ use crate::entities::{
 use crate::models::{
     template::{TemplateModel, CreateTemplate, UpdateTemplate},
     listing::{ListingModel, ListingCreate, ListingStatus}, 
-    listing_attribute::{ListingAttributeModel, CreateListingAttribute}
+    listing_attribute::{ListingAttributeModel, CreateListingAttribute, UpdateListingAttribute}
     
 };
-
-impl From<template::Model> for TemplateModel {
-    fn from(model: template::Model) -> Self {
-        TemplateModel {
-            id: model.id,
-            directory_id: model.directory_id,
-            name: model.name,
-            description: model.description,
-            template_type: model.template_type,
-            is_active: model.is_active,
-            category_id: model.category_id,
-            created_at: model.created_at,
-            updated_at: model.updated_at,
-
-        }
-    }
-}
-
-impl From<listing::Model> for ListingModel {
-    fn from(model: listing::Model) -> Self {
-        ListingModel {
-            id: model.id,
-            profile_id: model.profile_id,
-            directory_id: model.directory_id,
-            title: model.title,
-            description: model.description,
-            contact_info: None,
-            status: ListingStatus::from_str(&model.status).unwrap_or(ListingStatus::Pending),
-            created_at: model.created_at,
-            updated_at: model.updated_at,
-        }
-    }
-}
 
 pub async fn get_templates(
     Path(directory_id): Path<Uuid>,
@@ -152,10 +121,9 @@ pub async fn update_template(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({"error": "Failed to fetch template for update", "details": err.to_string()})),
             )
-        })
+        })?
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(json!({"error": "Template not found"}))))?
-        .into();
-
+        .into_active_model();
     // Update fields based on the payload
     if let name = payload.name {
         template.name = Set(name);
@@ -164,6 +132,7 @@ pub async fn update_template(
         template.description = Set(description);
     }
     // ... update other fields similarly
+
 
     template.updated_at = Set(Utc::now());
 
@@ -174,7 +143,9 @@ pub async fn update_template(
         )
     })?;
 
-    Ok(Json(TemplateModel::from(updated_template)))
+    let template_model = TemplateModel::from(updated_template);
+
+    Ok(Json(template_model))
 }
 
 pub async fn delete_template(
@@ -202,12 +173,10 @@ pub async fn delete_template(
     }
 }
 
-// ... other handler functions
-
 pub async fn create_listing_from_template(
     Path((directory_id, template_id)): Path<(Uuid, Uuid)>,
     Extension(current_user): Extension<user::Model>,
-    Json(input): Json<ListingCreate>, // Adjust ListingCreate to include only necessary fields
+    Json(input): Json<ListingCreate>,
     State(db): State<DatabaseConnection>,
 ) -> Result<Json<ListingModel>, (StatusCode, Json<serde_json::Value>)> {
     let txn = db.begin().await.map_err(|err| {
@@ -217,7 +186,7 @@ pub async fn create_listing_from_template(
         )
     })?;
 
-    // Fetch the template and its attributes
+    // Fetch the template
     let template = Template::find_by_id(template_id)
         .filter(template::Column::DirectoryId.eq(directory_id))
         .one(&txn)
@@ -227,109 +196,46 @@ pub async fn create_listing_from_template(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({"error": "Failed to fetch template", "details": err.to_string()})),
             )
-        })
+        })?
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(json!({"error": "Template not found"}))))?;
 
-    let template_attributes = template_attribute::Entity::find()
-        .filter(template_attribute::Column::TemplateId.eq(template_id))
-        .all(&txn)
-        .await
-        .map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "Failed to fetch template attributes", "details": err.to_string()})),
-            )
-        })?;
-
-    // Fetch the user's profiles
-    let user_accounts = user_account::Entity::find()
-        .filter(user_account::Column::UserId.eq(current_user.id))
-        .all(&txn)
-        .await
-        .map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "Failed to fetch user profiles", "details": err.to_string()})),
-            )
-        })?;
-
-    // Fetch the profile (ensure it's in the same directory as the template)
-    let profile = profile::Entity::find()
-        .filter(profile::Column::Id.eq(input.profile_id))
-        .filter(profile::Column::DirectoryId.eq(directory_id)) 
-        .one(&txn)
-        .await
-        .map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "Failed to fetch profile", "details": err.to_string()})),
-            )
-        })?
-        .ok_or_else(|| (StatusCode::NOT_FOUND, Json(json!({"error": "Profile not found"}))))?;
-
-    // Check if the user is associated with the profile
-    let user_account_exists = user_accounts
-        .iter()
-        .any(|ua| ua.account_id == profile.id);
-
-    if !user_account_exists {
-        return Err((StatusCode::FORBIDDEN, Json(json!({"error": "User not associated with this profile"}))));
-    }
-
-    // Create the listing
-    let new_listing = listing::ActiveModel {
+    // Create the listing based on the template and input
+    let listing = listing::ActiveModel {
         id: Set(Uuid::new_v4()),
-        profile_id: Set(profile.id),
+        profile_id: Set(current_user.id),
         directory_id: Set(directory_id),
-        category_id: Set(template.category_id), // Inherit category from template
-        title: Set(input.title.unwrap_or(template.name.clone())), // Use template name if title not provided
-        description: Set(input.description.unwrap_or(template.description.clone())),
-        listing_type: Set(template.template_type.clone()),
-        price: Set(input.price.or_else(|| template.suggested_price.map(|p| p as i64))),
-        status: Set(ListingStatus::Pending.to_string()), 
+        title: Set(input.title),
+        description: Set(input.description),
+        status: Set(ListingStatus::Pending),
+        category_id: Set(template.category_id),
+        listing_type: Set(template.template_type),
+        price: if let Some(price) = input.price { Set(Some(price)) } else { Set(Some(0)) },
+        price_type: Set(None),
+        country: Set(String::new()),
+        state: Set(String::new()),
+        city: Set(String::new()),
+        neighborhood: Set(None),
+        latitude: Set(None),
+        longitude: Set(None),
+        additional_info: Set(serde_json::Value::Null),
+        is_featured: Set(false),
         is_based_on_template: Set(true),
         based_on_template_id: Set(Some(template_id)),
-        price_type: Set(input.price_type.unwrap_or_else(|| "fixed".to_string())),
-        country: Set(input.country.unwrap_or_else(|| "USA".to_string())),
-        state: Set(input.state.unwrap_or_else(|| "".to_string())),
-        city: Set(input.city.unwrap_or_else(|| "".to_string())),
-        neighborhood: Set(input.neighborhood.unwrap_or_else(|| "".to_string())),
-        latitude: Set(input.latitude.unwrap_or_else(|| 0.0)),
-        longitude: Set(input.longitude.unwrap_or_else(|| 0.0)),
-        additional_info: Set(input.additional_info.unwrap_or_else(|| "".to_string())),
-        is_featured: Set(input.is_featured.unwrap_or_else(|| false)),
-        is_ad_placement: Set(input.is_ad_placement.unwrap_or_else(|| false)),
-        is_active: Set(input.is_active.unwrap_or_else(|| true)),
+        is_ad_placement: Set(false),
+        is_active: Set(true),
         created_at: Set(Utc::now()),
         updated_at: Set(Utc::now()),
     };
 
-    let inserted_listing = new_listing.insert(&txn).await.map_err(|err| {
+    // Insert the listing into the database
+    let inserted_listing = listing.insert(&txn).await.map_err(|err| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "Failed to create listing", "details": err.to_string()})),
+            Json(json!({"error": "Failed to insert listing", "details": err.to_string()})),
         )
     })?;
 
-    // Copy template attributes to the new listing
-    for attr in template_attributes {
-        let new_attr = listing_attribute::ActiveModel {
-            id: Set(Uuid::new_v4()),
-            listing_id: Set(inserted_listing.id),
-            attribute_type: Set(attr.attribute_type),
-            attribute_key: Set(attr.attribute_key),
-            value: Set(attr.value.clone()), 
-            created_at: Set(Utc::now()),
-            updated_at: Set(Utc::now()),
-        };
-        new_attr.insert(&txn).await.map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "Failed to create listing attribute", "details": err.to_string()})),
-            )
-        })?;
-    }
-
+    // Commit the transaction
     txn.commit().await.map_err(|err| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -337,18 +243,43 @@ pub async fn create_listing_from_template(
         )
     })?;
 
-    // Use the id field directly from the inserted_listing
-    let inserted_listing_model = Listing::find_by_id(inserted_listing.id)
-        .one(&db)
-        .await
-        .map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "Failed to fetch inserted listing", "details": err.to_string()})),
-            )
-        })?
-        .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Inserted listing not found"}))))?;
-
-    Ok(Json(ListingModel::from(inserted_listing_model)))
+    // Return the inserted listing as a ListingModel
+    Ok(Json(ListingModel::from_entity(inserted_listing)))
 }
 
+impl From<template::Model> for TemplateModel {
+    fn from(model: template::Model) -> Self {
+        TemplateModel {
+            id: model.id,
+            directory_id: model.directory_id,
+            name: model.name,
+            description: model.description,
+            template_type: model.template_type,
+            is_active: model.is_active,
+            category_id: model.category_id,
+            created_at: model.created_at,
+            updated_at: model.updated_at,
+
+        }
+    }
+}
+
+impl ListingModel {
+    pub fn from_entity(model: listing::Model) -> Self {
+        ListingModel {
+            id: model.id,
+            profile_id: model.profile_id,
+            directory_id: model.directory_id,
+            title: model.title,
+            description: model.description,
+            contact_info: String::new(), // Use an empty string if there's no contact info
+            status: if let ref status = model.status {
+                model.status
+            } else {
+                ListingStatus::Pending
+            },
+            created_at: model.created_at,
+            updated_at: model.updated_at,
+        }
+    }
+}

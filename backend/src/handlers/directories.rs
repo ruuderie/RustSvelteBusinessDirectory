@@ -4,22 +4,23 @@ use axum::{
     Json,
 };
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait};
+use crate::entities::directory::{self, Entity as Directory};
+use crate::models::directory::DirectoryModel;
 use serde_json::json;
 use uuid::Uuid;
-
-use crate::entities::directory;
-use crate::models::directory::DirectoryModel;
 
 pub async fn get_directories(
     State(db): State<DatabaseConnection>,
 ) -> Result<Json<Vec<DirectoryModel>>, (StatusCode, Json<serde_json::Value>)> {
-    let directories = directory::Entity::find()
+    // Fetch directories from the database
+    let directories = Directory::find()
         .all(&db)
         .await
         .map_err(|err| {
+            eprintln!("Database error: {:?}", err);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "Failed to fetch directories", "details": err.to_string()})),
+                Json(json!({ "error": "Internal Server Error" })),
             )
         })?;
 

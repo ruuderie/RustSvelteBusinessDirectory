@@ -1,4 +1,5 @@
 use sea_orm::entity::prelude::*;
+use sea_orm::ActiveValue;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -12,7 +13,8 @@ use crate::entities::listing::Relation::ListingAttribute;
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
-    pub listing_id: Uuid,
+    pub listing_id: Option<Uuid>, // Change this to Option<Uuid>
+    pub template_id: Option<Uuid>,
     pub attribute_type: AttributeType,
     pub attribute_key: AttributeKey,
     pub value: Value,
@@ -129,14 +131,18 @@ pub mod listing_helpers {
     pub async fn add_attribute(
         db: &DatabaseConnection,
         listing_id: Uuid,
+        template_id: Option<Uuid>,
         attribute_type: AttributeType,
         attribute_key: AttributeKey,
         value: Value,
     ) -> Result<Model, DbErr> {
+        // template_id is optional
+        let template_id: Option<Uuid> = template_id;
         let attribute = ActiveModel {
-            id: Set(Uuid::new_v4()),
-            listing_id: Set(listing_id),
-            attribute_type: Set(attribute_type),
+            id: ActiveValue::Set(Uuid::new_v4()),
+            template_id: ActiveValue::Set(template_id),
+            listing_id: ActiveValue::Set(Some(listing_id)),
+            attribute_type: ActiveValue::Set(attribute_type),
             attribute_key: Set(attribute_key),
             value: Set(value),
             created_at: Set(Utc::now()),

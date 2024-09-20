@@ -260,7 +260,7 @@ pub async fn approve_listing(
         .ok_or(StatusCode::NOT_FOUND)?
         .into();
 
-    listing.status = Set(ListingStatus::Approved.to_string());
+    listing.status = Set(ListingStatus::Approved);
 
     let updated_listing = listing.update(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -283,7 +283,7 @@ pub async fn reject_listing(
         .ok_or(StatusCode::NOT_FOUND)?
         .into();
 
-    listing.status = Set(ListingStatus::Rejected.to_string());
+    listing.status = Set(ListingStatus::Rejected);
 
     let updated_listing = listing.update(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 

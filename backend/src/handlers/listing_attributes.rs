@@ -76,14 +76,13 @@ pub async fn create_listing_attribute(
 ) -> Result<Json<ListingAttributeModel>, (StatusCode, Json<serde_json::Value>)> {
     let new_attribute = listing_attribute::ActiveModel {
         id: Set(Uuid::new_v4()),
-        listing_id: Set(listing_id),
+        listing_id: Set(Some(listing_id)),
+        template_id: Set(None),
         attribute_type: Set(payload.attribute_type),
         attribute_key: Set(payload.attribute_key),
         value: Set(payload.value),
         created_at: Set(Utc::now()),
         updated_at: Set(Utc::now()),
-        // Assuming template_id is optional in your model
-        template_id: Set(None), // or Set(payload.template_id) if it's required
     };
 
     let attribute = new_attribute
@@ -107,7 +106,7 @@ pub async fn update_listing_attribute(
     Json(payload): Json<UpdateListingAttribute>,
     State(db): State<DatabaseConnection>,
 ) -> Result<Json<ListingAttributeModel>, (StatusCode, Json<serde_json::Value>)> {
-    let attribute: listing_attribute::ActiveModel = listing_attribute::Entity::find()
+    let mut attribute: listing_attribute::ActiveModel = listing_attribute::Entity::find()
         .filter(listing_attribute::Column::Id.eq(attribute_id))
         .filter(listing_attribute::Column::ListingId.eq(listing_id))
         .one(&db)
@@ -234,8 +233,8 @@ pub async fn create_template_attribute(
 ) -> Result<Json<ListingAttributeModel>, (StatusCode, Json<serde_json::Value>)> {
     let new_attribute = listing_attribute::ActiveModel {
         id: Set(Uuid::new_v4()),
-        listing_id: Set(None), // No listing_id for template attributes
-        template_id: Set(Some(template_id)), 
+        listing_id: Set(None),
+        template_id: Set(Some(template_id)),
         attribute_type: Set(payload.attribute_type),
         attribute_key: Set(payload.attribute_key),
         value: Set(payload.value),
@@ -264,7 +263,7 @@ pub async fn update_template_attribute(
     Json(payload): Json<UpdateListingAttribute>,
     State(db): State<DatabaseConnection>,
 ) -> Result<Json<ListingAttributeModel>, (StatusCode, Json<serde_json::Value>)> {
-    let attribute: listing_attribute::ActiveModel = listing_attribute::Entity::find()
+    let mut attribute: listing_attribute::ActiveModel = listing_attribute::Entity::find()
         .filter(listing_attribute::Column::Id.eq(attribute_id))
         .filter(listing_attribute::Column::TemplateId.eq(template_id))
         .one(&db)

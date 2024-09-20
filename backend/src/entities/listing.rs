@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use crate::models::listing::ListingStatus;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "listing")]
@@ -24,7 +25,8 @@ pub struct Model {
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
     pub additional_info: Value,
-    pub status: String,
+    #[sea_orm(column_type = "String")]
+    pub status: ListingStatus,
     pub is_featured: bool,
     pub is_based_on_template: bool,
     pub based_on_template_id: Option<Uuid>,
