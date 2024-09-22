@@ -1,25 +1,39 @@
 use crate::entities::{
-    account::{self, Entity as Account}, ad_purchase::{self, Entity as AdPurchase}, profile::{self, Entity as Profile}, user::{self, Entity as User}, user_account::{self, Entity as UserAccount}
+    account::{self, Entity as Account},
+    ad_purchase::{self, Entity as AdPurchase},
+    profile::{self, Entity as Profile},
+    user::{self, Entity as User},
+    user_account::{self, Entity as UserAccount}
 };
-use crate::models::user_account::{UserAccountCreate, UserAccountUpdate};
 use crate::models::profile::{ProfileSearch, CreateProfileInput, UpdateProfileInput};
 use crate::models::account::{AccountModel, CreateAccountInput, UpdateAccountInput};
 use axum::{
-    extract::{Extension, Json, State, Path, Query},
+    extract::{Extension, Json, Path, Query},
     http::StatusCode,
     response::IntoResponse,
+    routing::{get, post, put, delete},
+    Router,
 };
 use sea_orm::{DatabaseConnection, EntityTrait, Set, Condition, ColumnTrait, QueryFilter, ActiveModelTrait, IntoActiveModel};
 use uuid::Uuid;
 use chrono::Utc;
-use serde::Deserialize;
 
+pub fn routes() -> Router {
+    Router::new()
+        .route("/profiles", post(create_profile))
+        .route("/profiles", get(get_profiles))
+        .route("/profiles/:id", get(get_profile_by_id))
+        .route("/profiles/:id", put(update_profile))
+        .route("/profiles/:id", delete(delete_profile))
+        .route("/profiles/search", get(search_profiles))
+}
 
 pub async fn create_profile(
     Extension(db): Extension<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
     Json(input): Json<CreateProfileInput>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    tracing::info!("Creating new profile for user: {}", current_user.id);
 
     // create or find the account
     let account = match Account::find()
@@ -27,7 +41,7 @@ pub async fn create_profile(
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching account: {:?}", err);
+            tracing::error!("Error fetching account: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })? {
             Some(account) => account,
@@ -41,7 +55,7 @@ pub async fn create_profile(
                     updated_at: Set(Utc::now()),
                 };
                 new_account.insert(&db).await.map_err(|err| {
-                    eprintln!("Error creating account: {:?}", err);
+                    tracing::error!("Error creating account: {:?}", err);
                     StatusCode::INTERNAL_SERVER_ERROR
                 })?
             }
@@ -72,7 +86,10 @@ pub async fn create_profile(
         new_profile.business_website = Set(business_details.website);
     }
 
-    let inserted_profile = new_profile.insert(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let inserted_profile = new_profile.insert(&db).await.map_err(|err| {
+        tracing::error!("Error inserting profile: {:?}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // Create the UserAccount association
     let new_user_account = user_account::ActiveModel {
@@ -85,22 +102,28 @@ pub async fn create_profile(
         updated_at: Set(Utc::now()),
     };
 
-    new_user_account.insert(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    new_user_account.insert(&db).await.map_err(|err| {
+        tracing::error!("Error creating user account: {:?}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     Ok((StatusCode::CREATED, Json(inserted_profile)))
 }
+
 pub async fn update_profile(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
     Path(id): Path<Uuid>,
     Json(input): Json<UpdateProfileInput>,
 ) -> Result<Json<profile::Model>, StatusCode> {
+    tracing::info!("Updating profile: {} for user: {}", id, current_user.id);
+
     // Fetch the profile
     let profile_to_update = Profile::find_by_id(id)
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching profile: {:?}", err);
+            tracing::error!("Error fetching profile: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
         .ok_or(StatusCode::NOT_FOUND)?;
@@ -112,7 +135,7 @@ pub async fn update_profile(
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching user account: {:?}", err);
+            tracing::error!("Error fetching user account: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
@@ -137,7 +160,7 @@ pub async fn update_profile(
     }
 
     let updated_profile = active_model.update(&db).await.map_err(|err| {
-        eprintln!("Error updating profile: {:?}", err);
+        tracing::error!("Error updating profile: {:?}", err);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
@@ -145,17 +168,19 @@ pub async fn update_profile(
 }
 
 pub async fn get_profiles(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
-) -> Result<Json<Vec<profile::Model>>, axum::http::StatusCode> {
+) -> Result<Json<Vec<profile::Model>>, StatusCode> {
+    tracing::info!("Fetching profiles for user: {}", current_user.id);
+
     // Fetch profiles associated with the user
     let user_accounts = UserAccount::find()
         .filter(user_account::Column::UserId.eq(current_user.id))
         .all(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching user profiles: {:?}", err);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            tracing::error!("Error fetching user profiles: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     let profile_ids: Vec<Uuid> = user_accounts.into_iter().map(|up| up.account_id).collect();
@@ -165,26 +190,28 @@ pub async fn get_profiles(
         .all(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching profiles: {:?}", err);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            tracing::error!("Error fetching profiles: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     Ok(Json(profiles))
 }
 
 pub async fn search_profiles(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
     Query(params): Query<ProfileSearch>,
-) -> Result<Json<Vec<profile::Model>>, axum::http::StatusCode> {
+) -> Result<Json<Vec<profile::Model>>, StatusCode> {
+    tracing::info!("Searching profiles for user: {}", current_user.id);
+
     // Fetch user profiles
     let user_accounts = UserAccount::find()
         .filter(user_account::Column::UserId.eq(current_user.id))
         .all(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching user profiles: {:?}", err);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            tracing::error!("Error fetching user profiles: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     let profile_ids: Vec<Uuid> = user_accounts.into_iter().map(|up| up.account_id).collect();
@@ -200,18 +227,20 @@ pub async fn search_profiles(
         .all(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error searching profiles: {:?}", err);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            tracing::error!("Error searching profiles: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     Ok(Json(profiles))
 }
 
 pub async fn delete_profile(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
+    tracing::info!("Deleting profile: {} for user: {}", id, current_user.id);
+
     // Check if the user has access to this profile
     let user_account = UserAccount::find()
         .filter(user_account::Column::UserId.eq(current_user.id))
@@ -219,12 +248,12 @@ pub async fn delete_profile(
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching user profile: {:?}", err);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            tracing::error!("Error fetching user profile: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     if user_account.is_none() {
-        return Err(axum::http::StatusCode::FORBIDDEN);
+        return Err(StatusCode::FORBIDDEN);
     }
 
     // Delete the profile
@@ -232,20 +261,20 @@ pub async fn delete_profile(
         .exec(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error deleting profile: {:?}", err);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            tracing::error!("Error deleting profile: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    Ok(axum::http::StatusCode::NO_CONTENT)
+    Ok(StatusCode::NO_CONTENT)
 }
 
-
-
 pub async fn get_profile_by_id(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
     Path(id): Path<Uuid>,
-) -> Result<Json<profile::Model>, axum::http::StatusCode> {
+) -> Result<Json<profile::Model>, StatusCode> {
+    tracing::info!("Fetching profile: {} for user: {}", id, current_user.id);
+
     // Check if the user has access to this profile
     let user_account = UserAccount::find()
         .filter(user_account::Column::UserId.eq(current_user.id))
@@ -253,12 +282,12 @@ pub async fn get_profile_by_id(
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching user profile: {:?}", err);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            tracing::error!("Error fetching user profile: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     if user_account.is_none() {
-        return Err(axum::http::StatusCode::FORBIDDEN);
+        return Err(StatusCode::FORBIDDEN);
     }
 
     // Fetch the profile by ID
@@ -266,10 +295,10 @@ pub async fn get_profile_by_id(
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching profile: {:?}", err);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            tracing::error!("Error fetching profile: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
         })?
-        .ok_or(axum::http::StatusCode::NOT_FOUND)?;
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     Ok(Json(profile))
 }

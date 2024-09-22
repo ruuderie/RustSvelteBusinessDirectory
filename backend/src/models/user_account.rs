@@ -5,7 +5,7 @@ use sea_orm::DeriveActiveEnum;
 use serde::{Serialize, Deserialize};
 use sea_orm::prelude::*;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct UserAccountCreate {
     pub user_id: Uuid,
     pub account_id: Uuid,
@@ -15,7 +15,7 @@ pub struct UserAccountCreate {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct UserAccountUpdate {
     pub user_id: Uuid,
     pub account_id: Uuid,

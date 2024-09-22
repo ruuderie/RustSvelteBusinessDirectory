@@ -1,205 +1,169 @@
 // src/handlers/user_accounts.rs
 
 use axum::{
-    extract::{Extension, Json, Path, State},
+    extract::{Extension, Path, Json},
     http::StatusCode,
-    response::IntoResponse,
+    response::{IntoResponse, Json as JsonResponse},
+    routing::{get, post, put, delete},
+    Router,
 };
 use sea_orm::{
-    DatabaseConnection, EntityTrait, QueryFilter, Set, ActiveModelTrait, ColumnTrait, ModelTrait
+    DatabaseConnection, EntityTrait, QueryFilter, Set, ColumnTrait,
+    ActiveModelTrait, ModelTrait,
 };
 use crate::entities::{
-    user_account, account, user, user_account::UserRole
+    user_account, user, account,
 };
-use crate::models::user_account::{UserAccountCreate, UserAccountUpdate};
+use crate::models::user_account::*;
 use uuid::Uuid;
 use chrono::Utc;
 
-pub async fn add_user_to_account(
-    State(db): State<DatabaseConnection>,
-    Extension(current_user): Extension<user::Model>,
-    Json(input): Json<UserAccountCreate>,
+pub fn routes() -> Router {
+    Router::new()
+        .route("/user-accounts", post(create_user_account))
+        .route("/user-accounts", get(get_user_accounts))
+        .route("/user-accounts/:id", get(get_user_account))
+        .route("/user-accounts/:id", put(update_user_account))
+        .route("/user-accounts/:id", delete(delete_user_account))
+}
+
+pub async fn create_user_account(
+    Extension(db): Extension<DatabaseConnection>,
+    Json(payload): Json<UserAccountCreate>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    // Fetch the account
-    let account = account::Entity::find_by_id(input.account_id)
+    tracing::info!("Creating new user account: {:?}", payload);
+
+    // Check if user exists
+    let user = user::Entity::find_by_id(payload.user_id)
         .one(&db)
         .await
-        .map_err(|err| {
-            eprintln!("Error fetching account: {:?}", err);
+        .map_err(|e| {
+            tracing::error!("Error fetching user: {:?}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or_else(|| {
+            tracing::warn!("User not found: {}", payload.user_id);
+            StatusCode::NOT_FOUND
+        })?;
 
-    // Check if current user has permission to add users to this account (e.g., is Owner)
-    let current_user_account = user_account::Entity::find()
-        .filter(user_account::Column::UserId.eq(current_user.id))
-        .filter(user_account::Column::AccountId.eq(account.id))
+    // Check if account exists
+    let account = account::Entity::find_by_id(payload.account_id)
         .one(&db)
         .await
-        .map_err(|err| {
-            eprintln!("Error fetching user_account: {:?}", err);
+        .map_err(|e| {
+            tracing::error!("Error fetching account: {:?}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
-        .ok_or(StatusCode::FORBIDDEN)?;
+        .ok_or_else(|| {
+            tracing::warn!("Account not found: {}", payload.account_id);
+            StatusCode::NOT_FOUND
+        })?;
 
-    if current_user_account.role != UserRole::Owner {
-        return Err(StatusCode::FORBIDDEN);
-    }
-
-    // Fetch the user to be added
-    let user_to_add = user::Entity::find_by_id(input.user_id)
-        .one(&db)
-        .await
-        .map_err(|err| {
-            eprintln!("Error fetching user: {:?}", err);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .ok_or(StatusCode::NOT_FOUND)?;
-
-    // Create the user_account association
     let new_user_account = user_account::ActiveModel {
         id: Set(Uuid::new_v4()),
-        user_id: Set(user_to_add.id),
+        user_id: Set(user.id),
         account_id: Set(account.id),
-        role: Set(input.role),
+        role: Set(payload.role),
         is_active: Set(true),
         created_at: Set(Utc::now()),
         updated_at: Set(Utc::now()),
     };
 
-    let inserted_user_account = new_user_account
-        .insert(&db)
-        .await
-        .map_err(|err| {
-            eprintln!("Error adding user to account: {:?}", err);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let inserted_user_account = new_user_account.insert(&db).await.map_err(|e| {
+        tracing::error!("Error creating user account: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
-    Ok((StatusCode::CREATED, Json(inserted_user_account)))
-}
-pub async fn create_user_account(
-    State(db): State<DatabaseConnection>,
-    Json(input): Json<UserAccountCreate>,
-) -> Result<impl IntoResponse, StatusCode> {
-    let new_user_account = user_account::ActiveModel {
-        id: Set(Uuid::new_v4()),
-        user_id: Set(input.user_id),
-        account_id: Set(input.account_id),
-        role: Set(input.role),
-        is_active: Set(input.is_active),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-    };
-
-    let inserted_user_account = new_user_account
-        .insert(&db)
-        .await
-        .map_err(|err| {
-            eprintln!("Error creating user account: {:?}", err);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    Ok(StatusCode::CREATED)
+    Ok((StatusCode::CREATED, JsonResponse(inserted_user_account)))
 }
 
-
-pub async fn list_user_accounts(
-    State(db): State<DatabaseConnection>,
-    Extension(current_user): Extension<user::Model>,
+pub async fn get_user_accounts(
+    Extension(db): Extension<DatabaseConnection>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    tracing::info!("Fetching all user accounts");
+
     let user_accounts = user_account::Entity::find()
-        .filter(user_account::Column::UserId.eq(current_user.id))
         .all(&db)
         .await
-        .map_err(|err| {
-            eprintln!("Error fetching user accounts: {:?}", err);
+        .map_err(|e| {
+            tracing::error!("Error fetching user accounts: {:?}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    Ok(Json(user_accounts))
+    Ok((StatusCode::OK, JsonResponse(user_accounts)))
 }
 
 pub async fn get_user_account(
-    State(db): State<DatabaseConnection>,
-    Path((user_id, account_id)): Path<(Uuid, Uuid)>,
+    Extension(db): Extension<DatabaseConnection>,
+    Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let user_account = user_account::Entity::find()
-        .filter(user_account::Column::UserId.eq(user_id))
-        .filter(user_account::Column::AccountId.eq(account_id))
+    tracing::info!("Fetching user account: {}", id);
+
+    let user_account = user_account::Entity::find_by_id(id)
         .one(&db)
         .await
-        .map_err(|err| {
-            eprintln!("Error fetching user account: {:?}", err);
+        .map_err(|e| {
+            tracing::error!("Error fetching user account: {:?}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or_else(|| {
+            tracing::warn!("User account not found: {}", id);
+            StatusCode::NOT_FOUND
+        })?;
 
-    Ok(Json(user_account))
+    Ok((StatusCode::OK, JsonResponse(user_account)))
 }
 
 pub async fn update_user_account(
-    State(db): State<DatabaseConnection>,
-    Extension(current_user): Extension<user::Model>,
-    Path((user_id, account_id)): Path<(Uuid, Uuid)>,
-    Json(input): Json<UserAccountUpdate>,
+    Extension(db): Extension<DatabaseConnection>,
+    Path(id): Path<Uuid>,
+    Json(payload): Json<UserAccountUpdate>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let user_account = user_account::Entity::find()
-        .filter(user_account::Column::UserId.eq(user_id))
-        .filter(user_account::Column::AccountId.eq(account_id))
+    tracing::info!("Updating user account: {}", id);
+
+    let user_account = user_account::Entity::find_by_id(id)
         .one(&db)
         .await
-        .map_err(|err| {
-            eprintln!("Error fetching user account: {:?}", err);
+        .map_err(|e| {
+            tracing::error!("Error fetching user account: {:?}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or_else(|| {
+            tracing::warn!("User account not found: {}", id);
+            StatusCode::NOT_FOUND
+        })?;
 
-    if user_account.user_id != current_user.id {
-        return Err(StatusCode::FORBIDDEN);
-    }
+    let mut user_account: user_account::ActiveModel = user_account.into();
+    user_account.role = Set(payload.role);
+    user_account.is_active = Set(payload.is_active);
+    user_account.updated_at = Set(Utc::now());
 
-    let updated_user_account = user_account::ActiveModel {
-        id: Set(user_account.id),
-        user_id: Set(user_account.user_id),
-        account_id: Set(user_account.account_id),
-        role: Set(input.role),
-        is_active: Set(input.is_active),
-        created_at: Set(user_account.created_at),
-        updated_at: Set(Utc::now()),
-    };
-
-    let result = updated_user_account.update(&db).await.map_err(|err| {
-        eprintln!("Error updating user account: {:?}", err);
+    let updated_user_account = user_account.update(&db).await.map_err(|e| {
+        tracing::error!("Error updating user account: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    Ok(Json(result))
+    Ok((StatusCode::OK, JsonResponse(updated_user_account)))
 }
 
 pub async fn delete_user_account(
-    State(db): State<DatabaseConnection>,
-    Extension(current_user): Extension<user::Model>,
-    Path((user_id, account_id)): Path<(Uuid, Uuid)>,
+    Extension(db): Extension<DatabaseConnection>,
+    Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let user_account = user_account::Entity::find()
-        .filter(user_account::Column::UserId.eq(user_id))
-        .filter(user_account::Column::AccountId.eq(account_id))
-        .one(&db)
+    tracing::info!("Deleting user account: {}", id);
+
+    let result = user_account::Entity::delete_by_id(id)
+        .exec(&db)
         .await
-        .map_err(|err| {
-            eprintln!("Error fetching user account: {:?}", err);
+        .map_err(|e| {
+            tracing::error!("Error deleting user account: {:?}", e);
             StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        })?;
 
-    if user_account.user_id != current_user.id {
-        return Err(StatusCode::FORBIDDEN);
+    if result.rows_affected == 0 {
+        tracing::warn!("User account not found: {}", id);
+        return Err(StatusCode::NOT_FOUND);
     }
-
-    let result = user_account.delete(&db).await.map_err(|err| {
-        eprintln!("Error deleting user account: {:?}", err);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
 
     Ok(StatusCode::NO_CONTENT)
 }

@@ -4,7 +4,10 @@
   import SearchBar from '$lib/components/SearchBar.svelte';
   import UserRegistration from '$lib/components/UserRegistration.svelte';
   import UserLogin from '$lib/components/UserLogin.svelte';
-  import { fetchBusinesses, searchBusinesses, registerUser, loginUser } from '$lib/api';
+  import { fetchListings, searchListings, fetchListingById,registerUser, loginUser } from '$lib/api';
+  import DirectorySelector from '$lib/components/DirectorySelector.svelte';
+  import { isAuthenticated } from '$lib/auth';
+  import { isProduction } from '$lib/stores/directoryStore';
 
   let businesses = [];
   let searchQuery = '';
@@ -18,7 +21,7 @@
   onMount(async () => {
     console.log('Fetching businesses...');
     try {
-      businesses = await fetchBusinesses();
+      businesses = await fetchListings();
       console.log('Fetched businesses:', businesses);
     } catch (err) {
       console.error('Error fetching businesses:', err);
@@ -33,7 +36,7 @@
     loading = true;
     error = null;
     try {
-      businesses = await searchBusinesses(searchQuery);
+      businesses = await searchListings(searchQuery);
       console.log('Search results:', businesses);
     } catch (err) {
       console.error('Error searching businesses:', err);
@@ -86,8 +89,21 @@
   <title>Business Directory</title>
 </svelte:head>
 
+{#if !$isProduction}
+  <DirectorySelector />
+{/if}
+
+{#if $isAuthenticated}
+  <DirectorySelector />
+  <!-- Rest of your authenticated content -->
+{:else}
+  <UserLogin on:login={handleLogin} />
+{/if}
+
 <div class="container mx-auto px-4 py-8">
   <h1 class="text-3xl font-bold text-center mb-8">Business Directory</h1>
+  
+  <DirectorySelector />
 
   {#if user}
     <div class="mb-4">

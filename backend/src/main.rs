@@ -23,6 +23,7 @@ use crate::api::create_router;
 async fn main() {
     dotenv::dotenv().ok();
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    println!("Database URL: {}", database_url);
     let db = Database::connect(&database_url)
         .await
         .expect("Failed to connect to database");
@@ -48,11 +49,11 @@ async fn main() {
 
     let app = Router::new()
         .nest("/api", create_router(db.clone()))
-        .nest(
+       /*  .nest(
             "/admin",
             admin_routes(db.clone())
                 .layer(from_fn(admin_middleware))
-        )
+        ) */
         .layer(from_fn_with_state(db.clone(), auth_middleware))
         .layer(cors);
 

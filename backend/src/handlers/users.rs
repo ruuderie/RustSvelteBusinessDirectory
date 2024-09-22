@@ -5,9 +5,10 @@ use crate::entities::{
     user_account::{self, Entity as UserAccount},
 };
 use axum::{
-    extract::{Extension, Json, State},
+    extract::{Extension, Json},
     http::StatusCode,
-    response::IntoResponse,
+    routing::{post},
+    Router,
 };
 use crate::models::user::{UserLogin, UserRegistration};
 use sea_orm::{DatabaseConnection, EntityTrait, Set, ColumnTrait, QueryFilter, ActiveModelTrait};
@@ -15,11 +16,17 @@ use uuid::Uuid;
 use chrono::{Utc, Duration};
 use crate::auth::{hash_password, verify_password, generate_jwt, Claims};
 
+pub fn public_routes() -> Router {
+    Router::new()
+        .route("/register", post(register_user))
+        .route("/login", post(login_user))
+}
+
 pub async fn register_user(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Json(user_data): Json<UserRegistration>,
-) -> Result<Json<user::Model>, axum::http::StatusCode> {
-    println!("Received registration request for email: {}", user_data.email);
+) -> Result<Json<user::Model>, StatusCode> {
+    tracing::info!("Received registration request for email: {}", user_data.email);
 
     let directory_id = user_data.directory_id;
 
@@ -29,20 +36,20 @@ pub async fn register_user(
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Database error when checking for existing user: {:?}", err);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            tracing::error!("Database error when checking for existing user: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     if existing_user.is_some() {
-        println!("User with email {} already exists in the system", user_data.email);
-        return Err(axum::http::StatusCode::CONFLICT);
+        tracing::warn!("User with email {} already exists in the system", user_data.email);
+        return Err(StatusCode::CONFLICT);
     }
 
     // Step 2: Hash password and create a new user
     let hashed_password = hash_password(&user_data.password)
         .map_err(|err| {
-            eprintln!("Error hashing password: {:?}", err);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            tracing::error!("Error hashing password: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     // Clone username and email before moving them
@@ -62,8 +69,8 @@ pub async fn register_user(
     };
 
     let inserted_user = new_user.insert(&db).await.map_err(|err| {
-        eprintln!("Database error when inserting user: {:?}", err);
-        axum::http::StatusCode::INTERNAL_SERVER_ERROR
+        tracing::error!("Database error when inserting user: {:?}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
     // Step 4: Find or create the Profile for the directory
@@ -72,8 +79,8 @@ pub async fn register_user(
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Database error when finding profile: {:?}", err);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            tracing::error!("Database error when finding profile: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
     let account_id = profile.clone().unwrap().account_id;
 
@@ -99,12 +106,13 @@ pub async fn register_user(
         };
 
         let inserted_profile = new_profile.insert(&db).await.map_err(|err| {
-            eprintln!("Database error when inserting profile: {:?}", err);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            tracing::error!("Database error when inserting profile: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
         inserted_profile.id
     };
+
     // Step 5: Create the UserAccount to link user and profile
     let new_user_account = user_account::ActiveModel {
         id: Set(Uuid::new_v4()),
@@ -117,18 +125,18 @@ pub async fn register_user(
     };
 
     new_user_account.insert(&db).await.map_err(|err| {
-        eprintln!("Database error when creating user profile: {:?}", err);
-        axum::http::StatusCode::INTERNAL_SERVER_ERROR
+        tracing::error!("Database error when creating user profile: {:?}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
     Ok(Json(inserted_user))
 }
 
 pub async fn login_user(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Json(login_data): Json<UserLogin>,
 ) -> Result<Json<String>, StatusCode> {
-    println!("Received login request for email: {} in directory: {}", login_data.email, login_data.directory_id);
+    tracing::info!("Received login request for email: {} in directory: {}", login_data.email, login_data.directory_id);
 
     // Find the user by email
     let user = User::find()
@@ -136,7 +144,7 @@ pub async fn login_user(
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching user: {:?}", err);
+            tracing::error!("Error fetching user: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
         .ok_or(StatusCode::UNAUTHORIZED)?;
@@ -144,11 +152,11 @@ pub async fn login_user(
     // Verify password
     if verify_password(&login_data.password, &user.password_hash)
         .map_err(|err| {
-            eprintln!("Error verifying password: {:?}", err);
+            tracing::error!("Error verifying password: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
     {
-        println!("User authenticated");
+        tracing::info!("User authenticated");
 
         // Fetch user's profile for the specified directory
         let user_account = user_account::Entity::find()
@@ -173,17 +181,17 @@ pub async fn login_user(
 
             let token = generate_jwt(claims)
                 .map_err(|err| {
-                    eprintln!("Error generating JWT: {:?}", err);
+                    tracing::error!("Error generating JWT: {:?}", err);
                     StatusCode::INTERNAL_SERVER_ERROR
                 })?;
 
             Ok(Json(token))
         } else {
-            println!("User not associated with the specified directory");
+            tracing::warn!("User not associated with the specified directory");
             Err(StatusCode::FORBIDDEN)
         }
     } else {
-        println!("User authentication failed");
+        tracing::warn!("User authentication failed");
         Err(StatusCode::UNAUTHORIZED)
     }
 }

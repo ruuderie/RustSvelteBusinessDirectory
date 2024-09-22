@@ -1,7 +1,9 @@
 use axum::{
-    extract::{Extension, Path, State},
+    extract::{Extension, Path, Json},
     http::StatusCode,
-    response::{IntoResponse, Json},
+    response::{IntoResponse, Json as JsonResponse},
+    routing::{get, post, put, delete},
+    Router,
 };
 use sea_orm::{
     DatabaseConnection, EntityTrait, QueryFilter, Set, ColumnTrait,
@@ -44,10 +46,25 @@ impl Default for AccountResponse {
     }
 }
 
+pub fn routes() -> Router {
+    Router::new()
+        .route("/accounts", post(create_account))
+        .route("/accounts", get(get_accounts))
+        .route("/accounts/:id", get(get_account))
+        .route("/accounts/:id", put(update_account))
+        .route("/accounts/:id", delete(delete_account))
+        .route("/accounts/:id/users", post(add_user_to_account))
+        .route("/accounts/:id/users", get(get_account_users))
+        .route("/accounts/:account_id/users/:user_id", delete(remove_user_from_account))
+        .route("/accounts/:account_id/users/:user_id/role", put(update_user_role_in_account))
+}
+
 pub async fn create_account(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Json(payload): Json<CreateAccountDto>,
 ) -> impl IntoResponse {
+    tracing::info!("Creating new account: {}", payload.name);
+
     let new_account = account::ActiveModel {
         id: Set(Uuid::new_v4()),
         name: Set(payload.name.clone()),
@@ -63,16 +80,21 @@ pub async fn create_account(
                 name: payload.name,
                 created_at: Utc::now(),
             };
-            (StatusCode::CREATED, Json(account_response))
+            (StatusCode::CREATED, JsonResponse(account_response))
         }
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(AccountResponse::default())),
+        Err(err) => {
+            tracing::error!("Error creating account: {:?}", err);
+            (StatusCode::INTERNAL_SERVER_ERROR, JsonResponse(AccountResponse::default()))
+        }
     }
 }
 
 pub async fn get_account(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Path(account_id): Path<Uuid>,
 ) -> impl IntoResponse {
+    tracing::info!("Fetching account: {}", account_id);
+
     match account::Entity::find_by_id(account_id).one(&db).await {
         Ok(Some(account)) => {
             let account_response = AccountResponse {
@@ -80,30 +102,50 @@ pub async fn get_account(
                 name: account.name,
                 created_at: account.created_at,
             };
-            (StatusCode::OK, Json(account_response))
+            (StatusCode::OK, JsonResponse(account_response))
         }
-        Ok(None) => (StatusCode::NOT_FOUND, Json(AccountResponse::default())),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(AccountResponse::default())),
+        Ok(None) => {
+            tracing::warn!("Account not found: {}", account_id);
+            (StatusCode::NOT_FOUND, JsonResponse(AccountResponse::default()))
+        }
+        Err(err) => {
+            tracing::error!("Error fetching account: {:?}", err);
+            (StatusCode::INTERNAL_SERVER_ERROR, JsonResponse(AccountResponse::default()))
+        }
     }
 }
+
 pub async fn get_accounts(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
 ) -> impl IntoResponse {
+    tracing::info!("Fetching all accounts");
+
     match account::Entity::find().all(&db).await {
-        Ok(accounts) => (StatusCode::OK, Json(accounts)),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(Vec::new())),
+        Ok(accounts) => (StatusCode::OK, JsonResponse(accounts)),
+        Err(err) => {
+            tracing::error!("Error fetching accounts: {:?}", err);
+            (StatusCode::INTERNAL_SERVER_ERROR, JsonResponse(Vec::new()))
+        }
     }
 }
 
 pub async fn update_account(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Path(account_id): Path<Uuid>,
     Json(payload): Json<CreateAccountDto>,
 ) -> impl IntoResponse {
+    tracing::info!("Updating account: {}", account_id);
+
     let account = match account::Entity::find_by_id(account_id).one(&db).await {
         Ok(Some(account)) => account,
-        Ok(None) => return (StatusCode::NOT_FOUND, Json(())),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(())),
+        Ok(None) => {
+            tracing::warn!("Account not found: {}", account_id);
+            return (StatusCode::NOT_FOUND, JsonResponse(()));
+        }
+        Err(err) => {
+            tracing::error!("Error fetching account: {:?}", err);
+            return (StatusCode::INTERNAL_SERVER_ERROR, JsonResponse(()));
+        }
     };
 
     let mut account: account::ActiveModel = account.into();
@@ -118,27 +160,37 @@ pub async fn update_account(
                 created_at: updated.created_at,
             };
             
-            (StatusCode::OK, Json(()))
+            (StatusCode::OK, JsonResponse(()))
         }
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(())),
+        Err(err) => {
+            tracing::error!("Error updating account: {:?}", err);
+            (StatusCode::INTERNAL_SERVER_ERROR, JsonResponse(()))
+        }
     }
 }
 
 pub async fn delete_account(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Path(account_id): Path<Uuid>,
 ) -> impl IntoResponse {
+    tracing::info!("Deleting account: {}", account_id);
+
     match account::Entity::delete_by_id(account_id).exec(&db).await {
         Ok(_) => StatusCode::NO_CONTENT,
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        Err(err) => {
+            tracing::error!("Error deleting account: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        }
     }
 }
 
 pub async fn add_user_to_account(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Path(account_id): Path<Uuid>,
     Json(payload): Json<AddUserToAccountDto>,
 ) -> impl IntoResponse {
+    tracing::info!("Adding user {} to account {}", payload.user_id, account_id);
+
     let new_user_account = user_account::ActiveModel {
         id: Set(Uuid::new_v4()),
         user_id: Set(payload.user_id),
@@ -151,14 +203,19 @@ pub async fn add_user_to_account(
 
     match user_account::Entity::insert(new_user_account).exec(&db).await {
         Ok(_) => StatusCode::CREATED,
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        Err(err) => {
+            tracing::error!("Error adding user to account: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        }
     }
 }
 
 pub async fn get_account_users(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Path(account_id): Path<Uuid>,
 ) -> impl IntoResponse {
+    tracing::info!("Fetching users for account: {}", account_id);
+
     match user_account::Entity::find()
         .filter(user_account::Column::AccountId.eq(account_id))
         .all(&db)
@@ -171,25 +228,33 @@ pub async fn get_account_users(
                 .all(&db)
                 .await
             {
-                Ok(users) => (StatusCode::OK, Json(users)),
-                Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(Vec::new())),
+                Ok(users) => (StatusCode::OK, JsonResponse(users)),
+                Err(err) => {
+                    tracing::error!("Error fetching users: {:?}", err);
+                    (StatusCode::INTERNAL_SERVER_ERROR, JsonResponse(Vec::new()))
+                }
             }
         }
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(Vec::new())),
+        Err(err) => {
+            tracing::error!("Error fetching user accounts: {:?}", err);
+            (StatusCode::INTERNAL_SERVER_ERROR, JsonResponse(Vec::new()))
+        }
     }
 }
 
 pub async fn remove_user_from_account(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
     Path((account_id, user_id)): Path<(Uuid, Uuid)>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    tracing::info!("Removing user {} from account {}", user_id, account_id);
+
     // Fetch the account
     let account = account::Entity::find_by_id(account_id)
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching account: {:?}", err);
+            tracing::error!("Error fetching account: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
         .ok_or(StatusCode::NOT_FOUND)?;
@@ -201,12 +266,13 @@ pub async fn remove_user_from_account(
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching user_account: {:?}", err);
+            tracing::error!("Error fetching user_account: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
         .ok_or(StatusCode::FORBIDDEN)?;
 
     if current_user_account.role != user_account::UserRole::Owner {
+        tracing::warn!("User {} does not have permission to remove users from account {}", current_user.id, account_id);
         return Err(StatusCode::FORBIDDEN);
     }
 
@@ -217,7 +283,7 @@ pub async fn remove_user_from_account(
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching user_account to delete: {:?}", err);
+            tracing::error!("Error fetching user_account to delete: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
         .ok_or(StatusCode::NOT_FOUND)?;
@@ -227,7 +293,7 @@ pub async fn remove_user_from_account(
         .delete(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error removing user from account: {:?}", err);
+            tracing::error!("Error removing user from account: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
@@ -235,17 +301,19 @@ pub async fn remove_user_from_account(
 }
 
 pub async fn update_user_role_in_account(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
     Path((account_id, user_id)): Path<(Uuid, Uuid)>,
     Json(input): Json<UserAccountUpdate>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    tracing::info!("Updating role for user {} in account {}", user_id, account_id);
+
     // Fetch the account
     let account = account::Entity::find_by_id(account_id)
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching account: {:?}", err);
+            tracing::error!("Error fetching account: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
         .ok_or(StatusCode::NOT_FOUND)?;
@@ -257,12 +325,13 @@ pub async fn update_user_role_in_account(
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching user_account: {:?}", err);
+            tracing::error!("Error fetching user_account: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
         .ok_or(StatusCode::FORBIDDEN)?;
 
     if current_user_account.role != user_account::UserRole::Owner {
+        tracing::warn!("User {} does not have permission to update roles in account {}", current_user.id, account_id);
         return Err(StatusCode::FORBIDDEN);
     }
 
@@ -273,7 +342,7 @@ pub async fn update_user_role_in_account(
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching user_account to update: {:?}", err);
+            tracing::error!("Error fetching user_account to update: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
         .ok_or(StatusCode::NOT_FOUND)?;
@@ -288,9 +357,9 @@ pub async fn update_user_role_in_account(
         .update(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error updating user role in account: {:?}", err);
+            tracing::error!("Error updating user role in account: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    Ok(Json(updated_user_account))
+    Ok(JsonResponse(updated_user_account))
 }

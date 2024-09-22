@@ -13,6 +13,9 @@
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
 
+#test data 
+/listing_202409220054.csv
+
 # Svelte - Frontend
 
 # Node modules

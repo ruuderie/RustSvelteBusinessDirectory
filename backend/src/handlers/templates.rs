@@ -182,7 +182,7 @@ pub async fn delete_template(
 }
 
 
-async fn get_user_directory_id(
+pub async fn get_user_directory_id(
     txn: &sea_orm::DatabaseTransaction,
     current_user: &user::Model
 ) -> Result<Uuid, (StatusCode, Json<serde_json::Value>)> {

@@ -1,8 +1,10 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Extension},
     http::StatusCode,
     Json,
     response::IntoResponse,
+    routing::{get, post, put, delete},
+    Router,
 };
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, Set, ActiveModelTrait};
 use crate::entities::directory::{self, Entity as Directory};
@@ -11,15 +13,28 @@ use chrono::Utc;
 use serde_json::json;
 use uuid::Uuid;
 
+pub fn public_routes() -> Router {
+    Router::new()
+        .route("/directories", get(get_directories))
+        .route("/directories/:id", get(get_directory_by_id))
+        .route("/directories/type/:type_id", get(get_directories_by_type))
+}
+
+pub fn authenticated_routes() -> Router {
+    Router::new()
+        .route("/directories", post(create_directory))
+        .route("/directories/:id", put(update_directory))
+        .route("/directories/:id", delete(delete_directory))
+}
+
 pub async fn get_directories(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    // Fetch directories from the database
     let directories = Directory::find()
         .all(&db)
         .await
         .map_err(|err| {
-            eprintln!("Database error: {:?}", err);
+            tracing::error!("Database error: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
@@ -30,15 +45,16 @@ pub async fn get_directories(
 
     Ok(Json(directory_models))
 }
-//impl into response
+
 pub async fn get_directory_by_id(
     Path(directory_id): Path<Uuid>,
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
 ) -> Result<Json<DirectoryModel>, (StatusCode, Json<serde_json::Value>)> {
     let directory = directory::Entity::find_by_id(directory_id)
         .one(&db)
         .await
         .map_err(|err| {
+            tracing::error!("Failed to fetch directory: {:?}", err);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({"error": "Failed to fetch directory", "details": err.to_string()})),
@@ -47,25 +63,23 @@ pub async fn get_directory_by_id(
 
     let directory_model = directory.map(DirectoryModel::from);
 
-    if let Some(model) = directory_model {
-        Ok(Json(model))
-    } else {
-        Err((StatusCode::NOT_FOUND, Json(json!({"error": "Directory not found"}))))
-    }
+    directory_model
+        .map(Json)
+        .ok_or((StatusCode::NOT_FOUND, Json(json!({"error": "Directory not found"}))))
 }
+
 pub async fn get_directories_by_type(
     Path(directory_type_id): Path<Uuid>,
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
 ) -> Result<Json<Vec<DirectoryModel>>, StatusCode> {
     let directories = directory::Entity::find()
         .filter(directory::Column::DirectoryTypeId.eq(directory_type_id))
         .all(&db)
         .await
         .map_err(|err| {
-            eprintln!("Database error: {:?}", err);
+            tracing::error!("Database error: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
-
 
     let directory_models: Vec<DirectoryModel> = directories
         .into_iter()
@@ -74,8 +88,9 @@ pub async fn get_directories_by_type(
 
     Ok(Json(directory_models))
 }
+
 pub async fn create_directory(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Json(input): Json<DirectoryCreate>,
 ) -> Result<impl IntoResponse, StatusCode> {
     let new_directory = directory::ActiveModel {
@@ -88,11 +103,11 @@ pub async fn create_directory(
         updated_at: Set(Utc::now()),
     };
 
-    let inserted_directory = new_directory
+    new_directory
         .insert(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error creating directory: {:?}", err);
+            tracing::error!("Error creating directory: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR   
         })?;
 
@@ -101,14 +116,14 @@ pub async fn create_directory(
 
 pub async fn update_directory(
     Path(directory_id): Path<Uuid>,
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Json(input): Json<DirectoryUpdate>,
 ) -> Result<impl IntoResponse, StatusCode> {
     let directory = directory::Entity::find_by_id(directory_id)
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching directory: {:?}", err);
+            tracing::error!("Error fetching directory: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
@@ -129,16 +144,13 @@ pub async fn update_directory(
     if let description = input.description {
         directory.description = description;
     }
-    if let updated_at = input.updated_at {
-        directory.updated_at = updated_at;
-    }
+    directory.updated_at = Utc::now();
 
-
-    let updated_directory = directory::ActiveModel::from(directory)
+    directory::ActiveModel::from(directory)
         .update(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error updating directory: {:?}", err);
+            tracing::error!("Error updating directory: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
@@ -147,13 +159,13 @@ pub async fn update_directory(
 
 pub async fn delete_directory(
     Path(directory_id): Path<Uuid>,
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let result = directory::Entity::delete_by_id(directory_id)
+    directory::Entity::delete_by_id(directory_id)
         .exec(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error deleting directory: {:?}", err);
+            tracing::error!("Error deleting directory: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 

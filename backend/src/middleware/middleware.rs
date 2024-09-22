@@ -1,7 +1,7 @@
 use axum::{
     middleware::Next,
     response::Response,
-    http::StatusCode,
+    http::{StatusCode, Request},
 };
 use crate::auth::validate_jwt;
 use crate::entities::{user, user_account, profile, account};
@@ -9,9 +9,10 @@ use sea_orm::{EntityTrait, DatabaseConnection, QueryFilter, ColumnTrait};
 use uuid::Uuid;
 
 pub async fn auth_middleware<B>(
-    mut req: axum::http::Request<B>,
+    mut req: Request<B>,
     next: Next<B>,
 ) -> Result<Response, StatusCode> {
+    tracing::debug!("Auth middleware called for path: {}", req.uri().path());
     // Extract the Authorization header
     let auth_header = req.headers().get(axum::http::header::AUTHORIZATION)
         .ok_or(StatusCode::UNAUTHORIZED)?;

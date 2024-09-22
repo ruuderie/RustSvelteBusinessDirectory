@@ -9,7 +9,7 @@
   let username = '';
   let email = '';
   let password = '';
-  export let errorMessage = ''; // Add this line to accept the errorMessage prop
+  export let errorMessage = '';
 
   function handleSubmit() {
     dispatch('register', { username, email, password });

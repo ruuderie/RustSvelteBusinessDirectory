@@ -28,6 +28,7 @@
 declare module '$env/static/private' {
 	export const API_URL: string;
 	export const FRONTEND_URL: string;
+	export const VITE_DIRECTORY_ID: string;
 	export const NVM_INC: string;
 	export const STARSHIP_SHELL: string;
 	export const NIX_PROFILES: string;
@@ -125,6 +126,7 @@ declare module '$env/dynamic/private' {
 	export const env: {
 		API_URL: string;
 		FRONTEND_URL: string;
+		VITE_DIRECTORY_ID: string;
 		NVM_INC: string;
 		STARSHIP_SHELL: string;
 		NIX_PROFILES: string;

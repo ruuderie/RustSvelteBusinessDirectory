@@ -1,11 +1,38 @@
+import { get } from 'svelte/store';
+import { effectiveDirectoryId, isProduction } from './stores/directoryStore';
+
 // pull env variables from .env
 const API_URL = import.meta.env.API_URL || "http://localhost:8000/api";
 
 console.log("API_URL:", API_URL);
 
-export async function fetchBusinesses() {
-  console.log("Fetching businesses from:", `${API_URL}/businesses`);
-  const response = await fetch(`${API_URL}/businesses`);
+// Add a function to get the auth token from localStorage
+function getAuthToken() {
+  return localStorage.getItem('authToken');
+}
+
+export async function fetchDirectories() {
+  if (get(isProduction)) {
+    const directoryId = get(effectiveDirectoryId);
+    if (!directoryId) {
+      throw new Error("No directory configured for production");
+    }
+    return [{ id: directoryId, name: "Production Directory" }];
+  }
+
+  const response = await fetch(`${API_URL}/directories`);
+  if (!response.ok) {
+    throw new Error("Failed to fetch directories");
+  }
+  return response.json();
+}
+
+export async function fetchListings() {
+  const directoryId = get(effectiveDirectoryId);
+  if (!directoryId) {
+    throw new Error("No directory selected");
+  }
+  const response = await fetch(`${API_URL}/listings?directory_id=${directoryId}`);
   console.log("Response:", response);
   if (!response.ok) {
     throw new Error("Failed to fetch businesses");
@@ -13,21 +40,22 @@ export async function fetchBusinesses() {
   return response.json();
 }
 
-export async function searchBusinesses(query) {
-  console.log("Searching businesses with query:", query);
-  const response = await fetch(
-    `${API_URL}/businesses/search?q=${encodeURIComponent(query)}`,
-  );
+export async function searchListings(query) {
+  const directoryId = get(effectiveDirectoryId);
+  if (!directoryId) {
+    throw new Error("No directory selected");
+  }
+  const response = await fetch(`${API_URL}/listings/search?q=${query}&directory_id=${directoryId}`);
   console.log("Response:", response);
   if (!response.ok) {
-    throw new Error("Failed to search businesses");
+    throw new Error("Failed to search listings");
   }
   return response.json();
 }
 
-export async function fetchBusinessById(id) {
-  console.log("Fetching business details for id:", id);
-  const response = await fetch(`${API_URL}/businesses/${id}`);
+export async function fetchListingById(id) {
+  console.log("Fetching listing details for id:", id);
+  const response = await fetch(`${API_URL}/listings/${id}`);
   console.log("Response:", response);
   if (!response.ok) {
     throw new Error("Failed to fetch business details");
@@ -37,7 +65,7 @@ export async function fetchBusinessById(id) {
 
 export async function loginUser(credentials) {
   console.log("Logging in user");
-  const response = await fetch(`${API_URL}/users/login`, {
+  const response = await fetch(`${API_URL}/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -51,9 +79,10 @@ export async function loginUser(credentials) {
   }
   return response.json();
 }
+
 export async function registerUser(userData) {
   console.log("Registering user");
-  const response = await fetch(`${API_URL}/users/register`, {
+  const response = await fetch(`${API_URL}/register`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

@@ -1,13 +1,15 @@
 // src/handlers/ad_purchases.rs
 
 use axum::{
-    extract::{Extension, Path, State},
+    extract::{Extension, Path, Json},
     http::StatusCode,
-    response::{IntoResponse, Json},
+    response::{IntoResponse, Json as JsonResponse},
+    routing::{get, post, put, delete},
+    Router,
 };
 use sea_orm::{
     DatabaseConnection, EntityTrait, QueryFilter, Set, ColumnTrait,
-    InsertResult,UpdateResult
+    ActiveModelTrait, ModelTrait,
 };
 use crate::entities::{
     ad_purchase, profile, user_account, user,
@@ -16,12 +18,23 @@ use crate::models::ad_purchase::*;
 use uuid::Uuid;
 use chrono::Utc;
 
+pub fn routes() -> Router {
+    Router::new()
+        .route("/ad-purchases", post(create_ad_purchase))
+        .route("/ad-purchases", get(get_ad_purchases))
+        .route("/ad-purchases/:id", get(get_ad_purchase_by_id))
+        .route("/ad-purchases/:id", put(update_ad_purchase))
+        .route("/ad-purchases/:id", delete(delete_ad_purchase))
+}
+
 pub async fn create_ad_purchase(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
     Extension(directory_ids): Extension<Vec<Uuid>>,
     Json(input): Json<AdPurchaseCreate>,
-) -> Result<(StatusCode, Json<ad_purchase::Model>), StatusCode> {
+) -> Result<impl IntoResponse, StatusCode> {
+    tracing::info!("Creating new ad purchase for profile: {}", input.profile_id);
+
     // Fetch the profile
     let profile = profile::Entity::find()
         .filter(profile::Column::Id.eq(input.profile_id))
@@ -29,10 +42,13 @@ pub async fn create_ad_purchase(
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching profile: {:?}", err);
+            tracing::error!("Error fetching profile: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or_else(|| {
+            tracing::warn!("Profile not found: {}", input.profile_id);
+            StatusCode::NOT_FOUND
+        })?;
 
     // Check if the user is associated with the profile
     let user_account_exists = user_account::Entity::find()
@@ -41,11 +57,12 @@ pub async fn create_ad_purchase(
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error checking user_account association: {:?}", err);
+            tracing::error!("Error checking user_account association: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     if user_account_exists.is_none() {
+        tracing::warn!("User {} not associated with profile {}", current_user.id, input.profile_id);
         return Err(StatusCode::FORBIDDEN);
     }
     
@@ -62,39 +79,28 @@ pub async fn create_ad_purchase(
         price: Set(input.price),
     };
 
-    let insert_result: InsertResult<ad_purchase::ActiveModel> = ad_purchase::Entity::insert(new_ad_purchase)
-        .exec(&db)
-        .await
-        .map_err(|err| {
-            eprintln!("Error creating ad purchase: {:?}", err);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let inserted_ad_purchase = new_ad_purchase.insert(&db).await.map_err(|err| {
+        tracing::error!("Error creating ad purchase: {:?}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
-    // Fetch the inserted ad purchase
-    let inserted_ad_purchase = ad_purchase::Entity::find_by_id(insert_result.last_insert_id)
-        .one(&db)
-        .await
-        .map_err(|err| {
-            eprintln!("Error fetching inserted ad purchase: {:?}", err);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    Ok((StatusCode::CREATED, Json(inserted_ad_purchase)))
+    Ok((StatusCode::CREATED, JsonResponse(inserted_ad_purchase)))
 }
 
 pub async fn get_ad_purchases(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
     Extension(directory_ids): Extension<Vec<Uuid>>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    tracing::info!("Fetching ad purchases for user: {}", current_user.id);
+
     // Fetch profiles associated with the user's directories
     let profiles = profile::Entity::find()
         .filter(profile::Column::DirectoryId.is_in(directory_ids))
         .all(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching profiles: {:?}", err);
+            tracing::error!("Error fetching profiles: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
@@ -106,99 +112,110 @@ pub async fn get_ad_purchases(
         .all(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching ad purchases: {:?}", err);
+            tracing::error!("Error fetching ad purchases: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    Ok(Json(ad_purchases))
+    Ok((StatusCode::OK, JsonResponse(ad_purchases)))
 }
 
 pub async fn update_ad_purchase(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
     Extension(directory_ids): Extension<Vec<Uuid>>,
     Path(id): Path<Uuid>,
     Json(input): Json<AdPurchaseUpdate>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    tracing::info!("Updating ad purchase: {}", id);
+
     // Fetch the ad purchase
     let ad_purchase = ad_purchase::Entity::find()
         .filter(ad_purchase::Column::Id.eq(id))
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching ad purchase: {:?}", err);
+            tracing::error!("Error fetching ad purchase: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or_else(|| {
+            tracing::warn!("Ad purchase not found: {}", id);
+            StatusCode::NOT_FOUND
+        })?;
 
     // Fetch the profile associated with the ad purchase
     let profile = profile::Entity::find_by_id(ad_purchase.profile_id)
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching profile: {:?}", err);
+            tracing::error!("Error fetching profile: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or_else(|| {
+            tracing::warn!("Profile not found for ad purchase: {}", id);
+            StatusCode::NOT_FOUND
+        })?;
 
     // Check directory isolation
     if !directory_ids.contains(&profile.directory_id) {
+        tracing::warn!("User {} not authorized to update ad purchase {}", current_user.id, id);
         return Err(StatusCode::FORBIDDEN);
     }
 
     // Update the ad purchase   
-    let updated_ad_purchase = ad_purchase::ActiveModel {
-        id: Set(ad_purchase.id),
-        profile_id: Set(ad_purchase.profile_id),
-        listing_id: Set(input.listing_id),
-        start_date: Set(input.start_date),
-        end_date: Set(input.end_date),
-        status: Set(AdStatus::Pending.to_string()), 
-        price: Set(input.price),
-        created_at: Set(ad_purchase.created_at),
-        updated_at: Set(Utc::now()),
-    };
+    let mut updated_ad_purchase: ad_purchase::ActiveModel = ad_purchase.into();
+    updated_ad_purchase.listing_id = Set(input.listing_id);
+    updated_ad_purchase.start_date = Set(input.start_date);
+    updated_ad_purchase.end_date = Set(input.end_date);
+    updated_ad_purchase.status = Set(AdStatus::Pending.to_string()); 
+    updated_ad_purchase.price = Set(input.price);
+    updated_ad_purchase.updated_at = Set(Utc::now());
 
-    let updated_model = ad_purchase::Entity::update(updated_ad_purchase)
-        .exec(&db)
-        .await
-        .map_err(|err| {
-            eprintln!("Error updating ad purchase: {:?}", err);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let updated_model = updated_ad_purchase.update(&db).await.map_err(|err| {
+        tracing::error!("Error updating ad purchase: {:?}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
-    Ok(Json(updated_model))
+    Ok((StatusCode::OK, JsonResponse(updated_model)))
 }
 
 pub async fn delete_ad_purchase(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
     Extension(directory_ids): Extension<Vec<Uuid>>,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    tracing::info!("Deleting ad purchase: {}", id);
+
     // Fetch the ad purchase
     let ad_purchase = ad_purchase::Entity::find()
         .filter(ad_purchase::Column::Id.eq(id))
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching ad purchase: {:?}", err);
+            tracing::error!("Error fetching ad purchase: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or_else(|| {
+            tracing::warn!("Ad purchase not found: {}", id);
+            StatusCode::NOT_FOUND
+        })?;
 
     // Fetch the profile associated with the ad purchase
     let profile = profile::Entity::find_by_id(ad_purchase.profile_id)
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching profile: {:?}", err);
+            tracing::error!("Error fetching profile: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or_else(|| {
+            tracing::warn!("Profile not found for ad purchase: {}", id);
+            StatusCode::NOT_FOUND
+        })?;
 
     // Check directory isolation
     if !directory_ids.contains(&profile.directory_id) {
+        tracing::warn!("User {} not authorized to delete ad purchase {}", current_user.id, id);
         return Err(StatusCode::FORBIDDEN);
     }
 
@@ -207,45 +224,53 @@ pub async fn delete_ad_purchase(
         .exec(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error deleting ad purchase: {:?}", err);
+            tracing::error!("Error deleting ad purchase: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     Ok(StatusCode::NO_CONTENT)
 }
 
-
 pub async fn get_ad_purchase_by_id(
-    State(db): State<DatabaseConnection>,
+    Extension(db): Extension<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
     Extension(directory_ids): Extension<Vec<Uuid>>,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    tracing::info!("Fetching ad purchase: {}", id);
+
     // Fetch the ad purchase
     let ad_purchase = ad_purchase::Entity::find()
         .filter(ad_purchase::Column::Id.eq(id))
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching ad purchase: {:?}", err);
+            tracing::error!("Error fetching ad purchase: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or_else(|| {
+            tracing::warn!("Ad purchase not found: {}", id);
+            StatusCode::NOT_FOUND
+        })?;
 
     // Fetch the profile associated with the ad purchase
     let profile = profile::Entity::find_by_id(ad_purchase.profile_id)
         .one(&db)
         .await
         .map_err(|err| {
-            eprintln!("Error fetching profile: {:?}", err);
+            tracing::error!("Error fetching profile: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or_else(|| {
+            tracing::warn!("Profile not found for ad purchase: {}", id);
+            StatusCode::NOT_FOUND
+        })?;
 
     // Check directory isolation
     if !directory_ids.contains(&profile.directory_id) {
+        tracing::warn!("User {} not authorized to view ad purchase {}", current_user.id, id);
         return Err(StatusCode::FORBIDDEN);
     }
 
-    Ok(Json(ad_purchase))
+    Ok((StatusCode::OK, JsonResponse(ad_purchase)))
 }

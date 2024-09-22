@@ -1,12 +1,18 @@
-<script>import "../app.css";
-import Header from '$lib/components/Header.svelte';</script>
+<script>
+  import { selectedDirectoryId, isProduction } from '$lib/stores/directoryStore';
+  import DirectorySelector from '$lib/components/DirectorySelector.svelte';
 
-<Header></Header>
+  $: directorySelected = $selectedDirectoryId !== null;
+</script>
 
-<main>
-  <slot></slot>
-</main>
-
+{#if !directorySelected && !$isProduction}
+  <p>Please select a directory to continue:</p>
+  <DirectorySelector />
+{:else if !directorySelected && $isProduction}
+  <p>Error: No directory configured. Please contact the administrator.</p>
+{:else}
+  <slot />
+{/if}
 
 <style>
   main {
