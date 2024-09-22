@@ -11,11 +11,14 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(User::Table)
                     .if_not_exists()
-                    .col(ColumnDef::new(User::Id).integer().not_null().auto_increment().primary_key())
+                    .col(ColumnDef::new(User::Id).uuid().not_null().primary_key())
                     .col(ColumnDef::new(User::Username).string().not_null().unique_key())
                     .col(ColumnDef::new(User::Email).string().not_null().unique_key())
                     .col(ColumnDef::new(User::PasswordHash).string().not_null())
-                    .col(ColumnDef::new(User::CreatedAt).timestamp().not_null().default(Expr::current_timestamp()))
+                    .col(ColumnDef::new(User::IsAdmin).boolean().not_null().default(false))
+                    .col(ColumnDef::new(User::IsActive).boolean().not_null().default(true))
+                    .col(ColumnDef::new(User::CreatedAt).timestamp().not_null())
+                    .col(ColumnDef::new(User::UpdatedAt).timestamp().not_null())
                     .to_owned(),
             )
             .await
@@ -29,11 +32,14 @@ impl MigrationTrait for Migration {
 }
 
 #[derive(Iden)]
-pub enum User {
+enum User {
     Table,
     Id,
     Username,
     Email,
     PasswordHash,
+    IsAdmin,
+    IsActive,
     CreatedAt,
+    UpdatedAt,
 }

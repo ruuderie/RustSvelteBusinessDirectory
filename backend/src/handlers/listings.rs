@@ -11,16 +11,21 @@ use crate::models::listing::{ListingCreate, ListingUpdate, ListingStatus};
 use sea_orm::{
     DatabaseConnection, EntityTrait, Set, QueryFilter, ColumnTrait, ActiveModelTrait, TransactionTrait,
 };
-use axum::extract::{Path, Json, State, Extension};
+use axum::extract::{Path, Json, State, Extension, Query};
 use axum::http::StatusCode;
 use chrono::Utc;
 use uuid::Uuid;
 use serde_json::Value;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+pub struct ListingSearch {
+    q: String,
+}
 
 pub async fn get_listings(
     State(db): State<DatabaseConnection>,
-    Extension(current_user): Extension<user::Model>,
-    Extension(directory_ids): Extension<Vec<Uuid>>,
+    Extension((current_user, directory_ids)): Extension<(user::Model, Vec<Uuid>)>,
 ) -> Result<Json<Vec<listing::Model>>, StatusCode> {
     let profiles = Profile::find()
         .filter(profile::Column::DirectoryId.is_in(directory_ids))
@@ -64,8 +69,7 @@ pub async fn get_listing_by_id(
 
 pub async fn create_listing(
     State(db): State<DatabaseConnection>,
-    Extension(current_user): Extension<user::Model>,
-    Extension(directory_ids): Extension<Vec<Uuid>>,
+    Extension((current_user, profile_id)): Extension<(user::Model, Uuid)>,
     Json(input): Json<ListingCreate>,
 ) -> Result<Json<listing::Model>, StatusCode> {
     let txn = db.begin().await.map_err(|err| {
@@ -75,6 +79,7 @@ pub async fn create_listing(
 
     let user_accounts = UserAccount::find()
         .filter(user_account::Column::UserId.eq(current_user.id))
+        .filter(user_account::Column::AccountId.eq(profile_id))
         .all(&txn)
         .await
         .map_err(|err| {
@@ -83,8 +88,7 @@ pub async fn create_listing(
         })?;
 
     let profile = Profile::find()
-        .filter(profile::Column::Id.eq(input.profile_id))
-        .filter(profile::Column::DirectoryId.is_in(directory_ids.clone()))
+        .filter(profile::Column::Id.eq(profile_id))
         .one(&txn)
         .await
         .map_err(|err| {
@@ -332,4 +336,19 @@ pub async fn delete_listing(
         })?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+pub async fn search_listings(
+    State(db): State<DatabaseConnection>,
+    Query(query): Query<ListingSearch>,
+) -> Result<Json<Vec<listing::Model>>, StatusCode> {
+    let listings = Listing::find()
+        .filter(listing::Column::Title.like(format!("%{}%", query.q).as_str()))
+        .all(&db)
+        .await
+        .map_err(|err| {
+            eprintln!("Error searching listings: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(Json(listings))
 }

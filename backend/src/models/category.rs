@@ -17,7 +17,7 @@ pub struct CategoryModel {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct CreateCategory {
     pub directory_type_id: Uuid,
     pub parent_category_id: Option<Uuid>,
@@ -27,7 +27,7 @@ pub struct CreateCategory {
     pub is_active: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct UpdateCategory {
     pub directory_type_id: Option<Uuid>,
     pub parent_category_id: Option<Uuid>,

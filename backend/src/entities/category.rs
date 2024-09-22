@@ -18,26 +18,31 @@ pub struct Model {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+#[derive(Copy, Clone, Debug, EnumIter)]
 pub enum Relation {
-    #[sea_orm(
-        belongs_to = "super::directory_type::Entity",
-        from = "Column::DirectoryTypeId",
-        to = "super::directory_type::Column::Id"
-    )]
     DirectoryType,
-    #[sea_orm(
-        belongs_to = "Entity",
-        from = "Column::ParentCategoryId",
-        to = "Column::Id"
-    )]
     ParentCategory,
-    #[sea_orm(has_many = "Entity")]
     SubCategories,
-    #[sea_orm(has_many = "super::template::Entity")]
     Templates,
-    #[sea_orm(has_many = "super::listing::Entity")]
     Listings,
+}
+
+impl RelationTrait for Relation {
+    fn def(&self) -> RelationDef {
+        match self {
+            Self::DirectoryType => Entity::belongs_to(super::directory_type::Entity)
+                .from(Column::DirectoryTypeId)
+                .to(super::directory_type::Column::Id)
+                .into(),
+            Self::ParentCategory => Entity::belongs_to(super::category::Entity)
+                .from(Column::ParentCategoryId)
+                .to(super::category::Column::Id)
+                .into(),
+            Self::SubCategories => Entity::has_many(super::category::Entity).into(),
+            Self::Templates => Entity::has_many(super::template::Entity).into(),
+            Self::Listings => Entity::has_many(super::listing::Entity).into(),
+        }
+    }
 }
 
 impl Related<super::directory_type::Entity> for Entity {
@@ -55,6 +60,12 @@ impl Related<super::template::Entity> for Entity {
 impl Related<super::listing::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Listings.def()
+    }
+}
+
+impl Related<Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::SubCategories.def()
     }
 }
 

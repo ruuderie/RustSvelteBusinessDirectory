@@ -102,6 +102,7 @@ pub enum AttributeKey {
 #[derive(Copy, Clone, Debug, EnumIter)]
 pub enum Relation {
     Listing,
+    Template,
 }
 
 impl RelationTrait for Relation {
@@ -111,6 +112,10 @@ impl RelationTrait for Relation {
                 .from(Column::ListingId)
                 .to(super::listing::Column::Id)
                 .into(),
+            Self::Template => Entity::belongs_to(super::template::Entity)
+                .from(Column::TemplateId)
+                .to(super::template::Column::Id)
+                .into(),
         }
     }
 }
@@ -118,6 +123,12 @@ impl RelationTrait for Relation {
 impl Related<super::listing::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Listing.def()
+    }
+}
+
+impl Related<super::template::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Template.def()
     }
 }
 

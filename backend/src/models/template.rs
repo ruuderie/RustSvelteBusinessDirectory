@@ -5,7 +5,7 @@ use sea_orm::DeriveActiveEnum;
 use serde::{Serialize, Deserialize};
 use sea_orm::prelude::*;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct TemplateModel {
     pub id: Uuid,
     pub directory_id: Uuid,
@@ -18,7 +18,7 @@ pub struct TemplateModel {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct CreateTemplate {
     pub name: String,
     pub directory_id: Uuid,
@@ -29,7 +29,7 @@ pub struct CreateTemplate {
     pub attributes: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct UpdateTemplate {
     pub id: Uuid,
     pub name: String,

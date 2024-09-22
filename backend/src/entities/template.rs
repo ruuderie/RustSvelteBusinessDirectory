@@ -18,24 +18,28 @@ pub struct Model {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+#[derive(Copy, Clone, Debug, EnumIter)]
 pub enum Relation {
-    #[sea_orm(
-        belongs_to = "super::directory::Entity",
-        from = "Column::DirectoryId",
-        to = "super::directory::Column::Id"
-    )]
     Directory,
-    #[sea_orm(
-        belongs_to = "super::category::Entity",
-        from = "Column::CategoryId",
-        to = "super::category::Column::Id"
-    )]
     Category,
-    #[sea_orm(has_many = "super::listing::Entity")] 
     BasedListings,
-    #[sea_orm(has_many = "super::listing_attribute::Entity")] 
     TemplateAttributes, 
+}
+impl RelationTrait for Relation {
+    fn def(&self) -> RelationDef {
+        match self {
+            Self::Directory => Entity::belongs_to(super::directory::Entity)
+                .from(Column::DirectoryId)
+                .to(super::directory::Column::Id)
+                .into(),
+            Self::Category => Entity::belongs_to(super::category::Entity)
+                .from(Column::CategoryId)
+                .to(super::category::Column::Id)
+                .into(),
+            Self::BasedListings => Entity::has_many(super::listing::Entity).into(),
+            Self::TemplateAttributes => Entity::has_many(super::listing_attribute::Entity).into(),
+        }
+    }
 }
 
 

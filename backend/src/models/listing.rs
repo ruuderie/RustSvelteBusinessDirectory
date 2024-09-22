@@ -3,12 +3,15 @@ use uuid::Uuid;
 use serde::{Serialize, Deserialize};
 use sea_orm::prelude::*;
 use serde_json::Value;
+use sea_orm::{IntoActiveModel, Set};
+use crate::entities::listing;
+use std::str::FromStr;
 
 #[derive(Debug, Deserialize)]
 pub struct ListingSearch {
     pub q: String,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ListingModel {
     pub id: Uuid,
     pub directory_id: Uuid,
@@ -31,31 +34,21 @@ pub enum ListingStatus {
     #[sea_orm(string_value = "rejected")]
     Rejected,
 }
-/* 
-    pub profile_id: Uuid,
-    pub directory_id: Uuid,
-    pub category_id: Uuid,
-    pub title: String,
-    pub description: String,
-    pub listing_type: String,
-    pub price: Option<i64>,
-    pub price_type: Option<String>,
-    pub country: String,
-    pub state: String,
-    pub city: String,
-    pub neighborhood: Option<String>,
-    pub latitude: Option<f64>,
-    pub longitude: Option<f64>,
-    pub additional_info: Value,
-    pub status: String,
-    pub is_featured: bool,
-    pub is_based_on_template: bool,
-    pub based_on_template_id: Option<Uuid>,
-    pub is_ad_placement: bool,
-    pub is_active: bool,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-*/
+
+impl FromStr for ListingStatus {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "pending" => Ok(ListingStatus::Pending),
+            "approved" => Ok(ListingStatus::Approved),
+            "rejected" => Ok(ListingStatus::Rejected),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ListingCreate {
     pub id: Uuid, 
     pub title: String,
@@ -83,6 +76,37 @@ pub struct ListingCreate {
     pub is_active: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+impl IntoActiveModel<listing::ActiveModel> for ListingCreate {
+    fn into_active_model(self) -> listing::ActiveModel {
+        listing::ActiveModel {
+            id: Set(self.id),
+            profile_id: Set(self.profile_id),
+            directory_id: Set(self.directory_id),
+            category_id: Set(self.category_id),
+            title: Set(self.title),
+            description: Set(self.description),
+            listing_type: Set(self.listing_type),
+            price: Set(self.price),
+            price_type: Set(self.price_type),
+            country: Set(self.country),
+            state: Set(self.state),
+            city: Set(self.city),
+            neighborhood: Set(self.neighborhood),
+            latitude: Set(self.latitude),
+            longitude: Set(self.longitude),
+            additional_info: Set(self.additional_info),
+            status: Set(self.status),
+            is_featured: Set(self.is_featured),
+            is_based_on_template: Set(self.is_based_on_template),
+            based_on_template_id: Set(self.based_on_template_id),
+            is_ad_placement: Set(self.is_ad_placement),
+            is_active: Set(self.is_active),
+            created_at: Set(self.created_at),
+            updated_at: Set(self.updated_at),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]

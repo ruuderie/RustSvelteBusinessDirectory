@@ -17,6 +17,7 @@ use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
 use crate::admin::admin_routes;
 use crate::middleware::{auth_middleware, admin_middleware};
+use crate::api::create_router;
 
 #[tokio::main]
 async fn main() {
@@ -29,7 +30,7 @@ async fn main() {
     println!("Database connection established");
 
     // Run migrations
-    migration::Migration::up(&db, None)
+    migration::Migrator::up(&db, None)
         .await
         .expect("Failed to run migrations");
     println!("Migrations completed");
@@ -46,7 +47,7 @@ async fn main() {
         .allow_headers(Any);
 
     let app = Router::new()
-        .nest("/api", api::router(db.clone()))
+        .nest("/api", create_router(db.clone()))
         .nest(
             "/admin",
             admin_routes(db.clone())

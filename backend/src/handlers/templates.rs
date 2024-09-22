@@ -3,8 +3,10 @@ use axum::{
     http::StatusCode,
 };
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, Set, TransactionTrait,IntoActiveModel
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, 
+    QueryFilter, Set, TransactionTrait,IntoActiveModel, DatabaseTransaction
 };
+use axum::response::{ Response, IntoResponse};
 use serde_json::json;
 use uuid::Uuid;
 use chrono::Utc;
@@ -27,6 +29,7 @@ use crate::models::{
     listing_attribute::{ListingAttributeModel, CreateListingAttribute, UpdateListingAttribute}
     
 };
+use crate::auth::AuthenticatedUser;
 
 pub async fn get_templates(
     Path(directory_id): Path<Uuid>,
@@ -51,7 +54,7 @@ pub async fn get_templates(
     Ok(Json(template_models))
 }
 
-pub async fn get_template(
+pub async fn get_template_by_id(
     Path((directory_id, template_id)): Path<(Uuid, Uuid)>,
     State(db): State<DatabaseConnection>,
 ) -> Result<Json<TemplateModel>, (StatusCode, Json<serde_json::Value>)> {
@@ -75,9 +78,9 @@ pub async fn get_template(
 }
 
 pub async fn create_template(
+    State(db): State<DatabaseConnection>,
     Path(directory_id): Path<Uuid>,
     Json(payload): Json<CreateTemplate>,
-    State(db): State<DatabaseConnection>,
 ) -> Result<Json<TemplateModel>, (StatusCode, Json<serde_json::Value>)> {
     let new_template = template::ActiveModel {
         id: Set(Uuid::new_v4()),
@@ -107,9 +110,9 @@ pub async fn create_template(
 }
 
 pub async fn update_template(
+    State(db): State<DatabaseConnection>,
     Path((directory_id, template_id)): Path<(Uuid, Uuid)>,
     Json(payload): Json<UpdateTemplate>,
-    State(db): State<DatabaseConnection>,
 ) -> Result<Json<TemplateModel>, (StatusCode, Json<serde_json::Value>)> {
     let mut template: template::ActiveModel = template::Entity::find()
         .filter(template::Column::Id.eq(template_id))
@@ -131,7 +134,12 @@ pub async fn update_template(
     if let description = payload.description {
         template.description = Set(description);
     }
-    // ... update other fields similarly
+    if let template_type = payload.template_type {
+        template.template_type = Set(template_type);
+    }
+    if let is_active = payload.is_active {
+        template.is_active = Set(is_active);
+    }
 
 
     template.updated_at = Set(Utc::now());
@@ -152,7 +160,7 @@ pub async fn delete_template(
     Path((directory_id, template_id)): Path<(Uuid, Uuid)>,
     State(db): State<DatabaseConnection>,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
-    // You might want to add checks here to prevent deletion if listings are based on this template
+    //  add checks here to prevent deletion if listings are based on this template
 
     let result = template::Entity::delete_many()
         .filter(template::Column::Id.eq(template_id))
@@ -173,78 +181,33 @@ pub async fn delete_template(
     }
 }
 
-pub async fn create_listing_from_template(
-    Path((directory_id, template_id)): Path<(Uuid, Uuid)>,
-    Extension(current_user): Extension<user::Model>,
-    Json(input): Json<ListingCreate>,
-    State(db): State<DatabaseConnection>,
-) -> Result<Json<ListingModel>, (StatusCode, Json<serde_json::Value>)> {
-    let txn = db.begin().await.map_err(|err| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "Failed to begin transaction", "details": err.to_string()})),
-        )
-    })?;
 
-    // Fetch the template
-    let template = Template::find_by_id(template_id)
-        .filter(template::Column::DirectoryId.eq(directory_id))
-        .one(&txn)
+async fn get_user_directory_id(
+    txn: &sea_orm::DatabaseTransaction,
+    current_user: &user::Model
+) -> Result<Uuid, (StatusCode, Json<serde_json::Value>)> {
+    let user_account = crate::entities::user_account::Entity::find()
+        .filter(crate::entities::user_account::Column::UserId.eq(current_user.id))
+        .one(txn)
         .await
-        .map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "Failed to fetch template", "details": err.to_string()})),
-            )
-        })?
-        .ok_or_else(|| (StatusCode::NOT_FOUND, Json(json!({"error": "Template not found"}))))?;
+        .map_err(internal_error)?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, Json(json!({"error": "User account not found"}))))?;
 
-    // Create the listing based on the template and input
-    let listing = listing::ActiveModel {
-        id: Set(Uuid::new_v4()),
-        profile_id: Set(current_user.id),
-        directory_id: Set(directory_id),
-        title: Set(input.title),
-        description: Set(input.description),
-        status: Set(ListingStatus::Pending),
-        category_id: Set(template.category_id),
-        listing_type: Set(template.template_type),
-        price: if let Some(price) = input.price { Set(Some(price)) } else { Set(Some(0)) },
-        price_type: Set(None),
-        country: Set(String::new()),
-        state: Set(String::new()),
-        city: Set(String::new()),
-        neighborhood: Set(None),
-        latitude: Set(None),
-        longitude: Set(None),
-        additional_info: Set(serde_json::Value::Null),
-        is_featured: Set(false),
-        is_based_on_template: Set(true),
-        based_on_template_id: Set(Some(template_id)),
-        is_ad_placement: Set(false),
-        is_active: Set(true),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-    };
+    let profile = crate::entities::profile::Entity::find()
+        .filter(crate::entities::profile::Column::AccountId.eq(user_account.account_id))
+        .one(txn)
+        .await
+        .map_err(internal_error)?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, Json(json!({"error": "Profile not found"}))))?;
 
-    // Insert the listing into the database
-    let inserted_listing = listing.insert(&txn).await.map_err(|err| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "Failed to insert listing", "details": err.to_string()})),
-        )
-    })?;
+    Ok(profile.directory_id)
+}
 
-    // Commit the transaction
-    txn.commit().await.map_err(|err| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "Failed to commit transaction", "details": err.to_string()})),
-        )
-    })?;
-
-    // Return the inserted listing as a ListingModel
-    Ok(Json(ListingModel::from_entity(inserted_listing)))
+fn internal_error(err: impl std::error::Error) -> (StatusCode, Json<serde_json::Value>) {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(json!({"error": err.to_string()})),
+    )
 }
 
 impl From<template::Model> for TemplateModel {
@@ -259,13 +222,24 @@ impl From<template::Model> for TemplateModel {
             category_id: model.category_id,
             created_at: model.created_at,
             updated_at: model.updated_at,
-
         }
     }
 }
 
 impl ListingModel {
-    pub fn from_entity(model: listing::Model) -> Self {
+    pub async fn from_insert_result(
+        result: sea_orm::InsertResult<listing::ActiveModel>,
+        db: &DatabaseConnection,
+    ) -> Result<Self, sea_orm::DbErr> {
+        let id = result.last_insert_id;
+        let model = Listing::find_by_id(id)
+            .one(db)
+            .await?
+            .expect("Failed to find inserted listing");
+        Ok(Self::from_entity(model))
+    }
+
+    pub fn from_entity(model: crate::entities::listing::Model) -> Self {
         ListingModel {
             id: model.id,
             profile_id: model.profile_id,
@@ -273,11 +247,7 @@ impl ListingModel {
             title: model.title,
             description: model.description,
             contact_info: String::new(), // Use an empty string if there's no contact info
-            status: if let ref status = model.status {
-                model.status
-            } else {
-                ListingStatus::Pending
-            },
+            status: model.status,
             created_at: model.created_at,
             updated_at: model.updated_at,
         }

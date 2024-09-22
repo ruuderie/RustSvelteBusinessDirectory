@@ -19,7 +19,7 @@ pub fn create_router(db: DatabaseConnection) -> Router {
         // Listing routes
         .route("/listings", get(listings::get_listings).post(listings::create_listing))
         .route("/listings/:id", get(listings::get_listing_by_id).put(listings::update_listing).delete(listings::delete_listing))
-
+        .route("/listings/search", get(listings::search_listings))
         // Account routes
         .route("/accounts", post(accounts::create_account).get(accounts::get_accounts))
         .route("/accounts/:id", get(accounts::get_account).put(accounts::update_account).delete(accounts::delete_account))

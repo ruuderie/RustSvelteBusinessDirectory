@@ -1,6 +1,7 @@
 use axum::{
     extract::{Extension, Json, Path, State},
     http::StatusCode,
+    response::IntoResponse,
 };
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, Set,
@@ -15,21 +16,16 @@ use crate::{
 };
 
 pub async fn get_listing_attributes(
-    Path((directory_id, listing_id)): Path<(Uuid, Uuid)>,
     State(db): State<DatabaseConnection>,
-) -> Result<Json<Vec<ListingAttributeModel>>, (StatusCode, Json<serde_json::Value>)> {
+    Path((listing_id)): Path<(Uuid)>,
+) -> Result<Json<Vec<ListingAttributeModel>>, StatusCode> {
     let attributes = listing_attribute::Entity::find()
         .filter(listing_attribute::Column::ListingId.eq(listing_id))
         .all(&db)
         .await
         .map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({
-                    "error": "Failed to fetch listing attributes",
-                    "details": err.to_string()
-                })),
-            )
+            eprintln!("Failed to fetch listing attributes: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     let attribute_models: Vec<ListingAttributeModel> = attributes
@@ -41,39 +37,28 @@ pub async fn get_listing_attributes(
 }
 
 pub async fn get_listing_attribute(
-    Path((directory_id, listing_id, attribute_id)): Path<(Uuid, Uuid, Uuid)>,
     State(db): State<DatabaseConnection>,
-) -> Result<Json<ListingAttributeModel>, (StatusCode, Json<serde_json::Value>)> {
+    Path((listing_id, attribute_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<ListingAttributeModel>, StatusCode> {
     let attribute = listing_attribute::Entity::find()
         .filter(listing_attribute::Column::Id.eq(attribute_id))
         .filter(listing_attribute::Column::ListingId.eq(listing_id))
         .one(&db)
         .await
         .map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({
-                    "error": "Failed to fetch listing attribute",
-                    "details": err.to_string()
-                })),
-            )
-        })?;
+            eprintln!("Failed to fetch listing attribute: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
-    if let Some(attribute) = attribute {
-        Ok(Json(ListingAttributeModel::from(attribute)))
-    } else {
-        Err((
-            StatusCode::NOT_FOUND,
-            Json(json!({"error": "Listing attribute not found"})),
-        ))
-    }
+    Ok(Json(ListingAttributeModel::from(attribute)))
 }
 
 pub async fn create_listing_attribute(
-    Path((directory_id, listing_id)): Path<(Uuid, Uuid)>,
+    Path((listing_id)): Path<(Uuid)>,
     Json(payload): Json<CreateListingAttribute>,
     State(db): State<DatabaseConnection>,
-) -> Result<Json<ListingAttributeModel>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Json<ListingAttributeModel>, StatusCode> {
     let new_attribute = listing_attribute::ActiveModel {
         id: Set(Uuid::new_v4()),
         listing_id: Set(Some(listing_id)),
@@ -89,38 +74,28 @@ pub async fn create_listing_attribute(
         .insert(&db)
         .await
         .map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({
-                    "error": "Failed to create listing attribute",
-                    "details": err.to_string()
-                })),
-            )
+            eprintln!("Failed to create listing attribute: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     Ok(Json(ListingAttributeModel::from(attribute)))
 }
 
 pub async fn update_listing_attribute(
-    Path((directory_id, listing_id, attribute_id)): Path<(Uuid, Uuid, Uuid)>,
-    Json(payload): Json<UpdateListingAttribute>,
     State(db): State<DatabaseConnection>,
-) -> Result<Json<ListingAttributeModel>, (StatusCode, Json<serde_json::Value>)> {
+    Path((listing_id, attribute_id)): Path<(Uuid, Uuid)>,
+    Json(payload): Json<UpdateListingAttribute>,
+) -> Result<Json<ListingAttributeModel>, StatusCode> {
     let mut attribute: listing_attribute::ActiveModel = listing_attribute::Entity::find()
         .filter(listing_attribute::Column::Id.eq(attribute_id))
         .filter(listing_attribute::Column::ListingId.eq(listing_id))
         .one(&db)
         .await
         .map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({
-                    "error": "Failed to fetch listing attribute for update",
-                    "details": err.to_string()
-                })),
-            )
+            eprintln!("Failed to fetch listing attribute for update: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
         })?
-        .ok_or_else(|| (StatusCode::NOT_FOUND, Json(json!({"error": "Listing attribute not found"}))))?
+        .ok_or(StatusCode::NOT_FOUND)?
         .into();
 
     // Update fields based on the payload
@@ -130,13 +105,8 @@ pub async fn update_listing_attribute(
     attribute.updated_at = Set(Utc::now());
 
     let updated_attribute = attribute.update(&db).await.map_err(|err| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({
-                "error": "Failed to update listing attribute",
-                "details": err.to_string()
-            })),
-        )
+        eprintln!("Failed to update listing attribute: {:?}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
     Ok(Json(ListingAttributeModel::from(updated_attribute)))
@@ -145,27 +115,19 @@ pub async fn update_listing_attribute(
 pub async fn delete_listing_attribute(
     Path((directory_id, listing_id, attribute_id)): Path<(Uuid, Uuid, Uuid)>,
     State(db): State<DatabaseConnection>,
-) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<StatusCode, StatusCode> {
     let result = listing_attribute::Entity::delete_many()
         .filter(listing_attribute::Column::Id.eq(attribute_id))
         .filter(listing_attribute::Column::ListingId.eq(listing_id))
         .exec(&db)
         .await
         .map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({
-                    "error": "Failed to delete listing attribute",
-                    "details": err.to_string()
-                })),
-            )
+            eprintln!("Failed to delete listing attribute: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     if result.rows_affected == 0 {
-        Err((
-            StatusCode::NOT_FOUND,
-            Json(json!({"error": "Listing attribute not found"})),
-        ))
+        Err(StatusCode::NOT_FOUND)
     } else {
         Ok(StatusCode::NO_CONTENT)
     }
@@ -174,19 +136,14 @@ pub async fn delete_listing_attribute(
 pub async fn get_template_attributes(
     Path((directory_id, template_id)): Path<(Uuid, Uuid)>,
     State(db): State<DatabaseConnection>,
-) -> Result<Json<Vec<ListingAttributeModel>>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Json<Vec<ListingAttributeModel>>, StatusCode> {
     let attributes = listing_attribute::Entity::find()
         .filter(listing_attribute::Column::TemplateId.eq(template_id))
         .all(&db)
         .await
         .map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({
-                    "error": "Failed to fetch template attributes",
-                    "details": err.to_string()
-                })),
-            )
+            eprintln!("Failed to fetch template attributes: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     let attribute_models: Vec<ListingAttributeModel> = attributes
@@ -198,39 +155,28 @@ pub async fn get_template_attributes(
 }
 
 pub async fn get_template_attribute(
-    Path((directory_id, template_id, attribute_id)): Path<(Uuid, Uuid, Uuid)>,
     State(db): State<DatabaseConnection>,
-) -> Result<Json<ListingAttributeModel>, (StatusCode, Json<serde_json::Value>)> {
+    Path((directory_id, template_id, attribute_id)): Path<(Uuid, Uuid, Uuid)>,
+) -> Result<Json<ListingAttributeModel>, StatusCode> {
     let attribute = listing_attribute::Entity::find()
         .filter(listing_attribute::Column::Id.eq(attribute_id))
         .filter(listing_attribute::Column::TemplateId.eq(template_id))
         .one(&db)
         .await
         .map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({
-                    "error": "Failed to fetch template attribute",
-                    "details": err.to_string()
-                })),
-            )
-        })?;
+            eprintln!("Failed to fetch template attribute: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
-    if let Some(attribute) = attribute {
-        Ok(Json(ListingAttributeModel::from(attribute)))
-    } else {
-        Err((
-            StatusCode::NOT_FOUND,
-            Json(json!({"error": "Template attribute not found"})),
-        ))
-    }
+    Ok(Json(ListingAttributeModel::from(attribute)))
 }
 
 pub async fn create_template_attribute(
     Path((directory_id, template_id)): Path<(Uuid, Uuid)>,
     Json(payload): Json<CreateListingAttribute>,
     State(db): State<DatabaseConnection>,
-) -> Result<Json<ListingAttributeModel>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Json<ListingAttributeModel>, StatusCode> {
     let new_attribute = listing_attribute::ActiveModel {
         id: Set(Uuid::new_v4()),
         listing_id: Set(None),
@@ -246,13 +192,8 @@ pub async fn create_template_attribute(
         .insert(&db)
         .await
         .map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({
-                    "error": "Failed to create template attribute",
-                    "details": err.to_string()
-                })),
-            )
+            eprintln!("Failed to create template attribute: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     Ok(Json(ListingAttributeModel::from(attribute)))
@@ -262,22 +203,17 @@ pub async fn update_template_attribute(
     Path((directory_id, template_id, attribute_id)): Path<(Uuid, Uuid, Uuid)>,
     Json(payload): Json<UpdateListingAttribute>,
     State(db): State<DatabaseConnection>,
-) -> Result<Json<ListingAttributeModel>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Json<ListingAttributeModel>, StatusCode> {
     let mut attribute: listing_attribute::ActiveModel = listing_attribute::Entity::find()
         .filter(listing_attribute::Column::Id.eq(attribute_id))
         .filter(listing_attribute::Column::TemplateId.eq(template_id))
         .one(&db)
         .await
         .map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({
-                    "error": "Failed to fetch template attribute for update",
-                    "details": err.to_string()
-                })),
-            )
+            eprintln!("Failed to fetch template attribute for update: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
         })?
-        .ok_or_else(|| (StatusCode::NOT_FOUND, Json(json!({"error": "Template attribute not found"}))))?
+        .ok_or(StatusCode::NOT_FOUND)?
         .into();
 
     // Update fields based on the payload
@@ -287,13 +223,8 @@ pub async fn update_template_attribute(
     attribute.updated_at = Set(Utc::now());
 
     let updated_attribute = attribute.update(&db).await.map_err(|err| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({
-                "error": "Failed to update template attribute",
-                "details": err.to_string()
-            })),
-        )
+        eprintln!("Failed to update template attribute: {:?}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
     Ok(Json(ListingAttributeModel::from(updated_attribute)))
@@ -302,27 +233,19 @@ pub async fn update_template_attribute(
 pub async fn delete_template_attribute(
     Path((directory_id, template_id, attribute_id)): Path<(Uuid, Uuid, Uuid)>,
     State(db): State<DatabaseConnection>,
-) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<StatusCode, StatusCode> {
     let result = listing_attribute::Entity::delete_many()
         .filter(listing_attribute::Column::Id.eq(attribute_id))
         .filter(listing_attribute::Column::TemplateId.eq(template_id))
         .exec(&db)
         .await
         .map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({
-                    "error": "Failed to delete template attribute",
-                    "details": err.to_string()
-                })),
-            )
+            eprintln!("Failed to delete template attribute: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     if result.rows_affected == 0 {
-        Err((
-            StatusCode::NOT_FOUND,
-            Json(json!({"error": "Template attribute not found"})),
-        ))
+        Err(StatusCode::NOT_FOUND)
     } else {
         Ok(StatusCode::NO_CONTENT)
     }

@@ -3,6 +3,14 @@ use serde::{Serialize, Deserialize};
 use chrono::{Utc, Duration};
 use bcrypt::{hash, verify, DEFAULT_COST};
 use crate::entities::user;
+use axum::{
+    async_trait,
+    extract::{FromRequest, Extension},
+    http::{StatusCode, Request},
+    response::IntoResponse,
+};
+use serde_json::json;
+use crate::entities::user::Model as UserModel;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -33,4 +41,35 @@ pub fn validate_jwt(token: &str) -> Result<Claims, jsonwebtoken::errors::Error> 
 
     let token_data = decode::<Claims>(token, &decoding_key, &validation)?;
     Ok(token_data.claims)
+}
+
+pub struct AuthenticatedUser(pub UserModel);
+
+#[async_trait]
+impl<B, S> FromRequest<S, B> for AuthenticatedUser
+where
+    B: Send + 'static,
+    S: Send + Sync,
+{
+    type Rejection = (StatusCode, axum::Json<serde_json::Value>);
+
+    async fn from_request(
+        req: Request<B>,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        // Example: Extract token and verify
+        // Here you should implement your actual authentication logic
+        // For demonstration, we'll assume the user is always authenticated
+        // and provide a dummy user
+
+        // Attempt to extract the user from extensions
+        if let Some(user) = req.extensions().get::<UserModel>().cloned() {
+            Ok(AuthenticatedUser(user))
+        } else {
+            Err((
+                StatusCode::UNAUTHORIZED,
+                axum::Json(json!({ "error": "Unauthorized" })),
+            ))
+        }
+    }
 }

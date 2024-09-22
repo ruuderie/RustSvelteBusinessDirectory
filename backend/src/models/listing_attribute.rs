@@ -6,7 +6,7 @@ use serde::{Serialize, Deserialize};
 use serde_json::Value;
 use crate::entities::listing_attribute::{AttributeType, AttributeKey};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ListingAttributeModel {
     pub id: Uuid,
     pub listing_id: Option<Uuid>,
@@ -18,14 +18,14 @@ pub struct ListingAttributeModel {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct CreateListingAttribute {
     pub attribute_type: AttributeType,
     pub attribute_key: AttributeKey,
     pub value: Value,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct UpdateListingAttribute {
     pub attribute_type: Option<AttributeType>,
     pub attribute_key: Option<AttributeKey>,

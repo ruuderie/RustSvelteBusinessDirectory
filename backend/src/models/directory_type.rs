@@ -4,7 +4,7 @@ use serde::{Serialize, Deserialize};
 use sea_orm::prelude::*;
 use crate::entities::directory_type;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct DirectoryTypeModel {
     pub id: Uuid,
     pub name: String,

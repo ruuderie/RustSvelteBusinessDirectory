@@ -1,14 +1,15 @@
-use crate::entities::{user, directory, listing, ad_purchase, profile};
+use crate::entities::{user, directory, listing, ad_purchase, profile, account, template, category, directory_type, listing_attribute};
 use axum::{
     extract::{Extension, Json, Path, State},
     http::StatusCode,
     response::IntoResponse,
 };
-use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, Set, ActiveModelTrait, PaginatorTrait};
+use sea_orm::{DatabaseConnection, EntityTrait,QuerySelect, QueryFilter,Order, ColumnTrait,QueryOrder, Set, ActiveModelTrait, PaginatorTrait};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use crate::models::listing::ListingStatus;
 use crate::models::ad_purchase::AdStatus;
+use std::collections::HashMap;
 
 #[derive(Deserialize)]
 pub struct UpdateUserInput {
@@ -30,6 +31,36 @@ pub struct AdPurchaseStats {
     active_purchases: i64,
     total_revenue: f64,
 }
+
+#[derive(Serialize)]
+pub struct UserStatistics {
+    total_users: i64,
+    active_users: i64,
+    total_admins: i64,
+}
+
+#[derive(Serialize)]
+pub struct AccountStatistics {
+    total_accounts: i64,
+    active_accounts: i64,
+}
+
+#[derive(Serialize)]
+pub struct ListingStats {
+    total_listings: i64,
+    active_listings: i64,
+}
+
+#[derive(Serialize)]
+pub struct ActivityReport {
+    recent_listings: Vec<listing::Model>,
+    recent_ad_purchases: Vec<ad_purchase::Model>,
+    recent_profiles: Vec<profile::Model>,
+    recent_users: Vec<user::Model>,
+    recent_accounts: Vec<account::Model>,
+}
+
+
 
 pub async fn list_users(
     State(db): State<DatabaseConnection>,
@@ -362,3 +393,194 @@ pub async fn cancel_ad_purchase(
 
     Ok(Json(updated_purchase))
 }
+
+pub async fn get_user_statistics(
+    State(db): State<DatabaseConnection>,
+    Extension(current_user): Extension<user::Model>,
+) -> Result<impl IntoResponse, StatusCode> {
+    if !current_user.is_admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let total_users = user::Entity::find().count(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let active_users = user::Entity::find()
+        .filter(user::Column::IsActive.eq(true))
+        .count(&db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let total_admins = user::Entity::find()
+        .filter(user::Column::IsAdmin.eq(true))
+        .count(&db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let stats = UserStatistics {
+        total_users: total_users.try_into().unwrap(),
+        active_users: active_users.try_into().unwrap(),
+        total_admins: total_admins.try_into().unwrap(),
+    };
+
+    Ok(Json(stats))
+}
+
+pub async fn get_account_statistics(
+    State(db): State<DatabaseConnection>,
+    Extension(current_user): Extension<user::Model>,
+) -> Result<impl IntoResponse, StatusCode> {
+    if !current_user.is_admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let total_accounts = account::Entity::find().count(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let active_accounts = account::Entity::find()
+        .filter(account::Column::IsActive.eq(true))
+        .count(&db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let stats = AccountStatistics {
+        total_accounts: total_accounts.try_into().unwrap(),
+        active_accounts: active_accounts.try_into().unwrap(),
+    };
+
+    Ok(Json(stats))
+}
+
+pub async fn get_listing_statistics(
+    State(db): State<DatabaseConnection>,
+    Extension(current_user): Extension<user::Model>,
+) -> Result<impl IntoResponse, StatusCode> {
+    if !current_user.is_admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let total_listings = listing::Entity::find().count(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let active_listings = listing::Entity::find()
+        .filter(listing::Column::Status.eq(ListingStatus::Approved))
+        .count(&db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let stats = ListingStats {
+        total_listings: total_listings.try_into().unwrap(),
+        active_listings: active_listings.try_into().unwrap(),
+    };
+
+    Ok(Json(stats))
+}
+
+pub async fn get_ad_purchase_statistics(
+    State(db): State<DatabaseConnection>,
+    Extension(current_user): Extension<user::Model>,
+) -> Result<impl IntoResponse, StatusCode> {
+    if !current_user.is_admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let total_purchases = ad_purchase::Entity::find().count(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let active_purchases = ad_purchase::Entity::find()
+        .filter(ad_purchase::Column::Status.eq(AdStatus::Active))
+        .count(&db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let total_revenue = ad_purchase::Entity::find()
+        .filter(ad_purchase::Column::Status.eq(AdStatus::Active))
+        .all(&db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .iter()
+        .fold(0.0, |acc, purchase| acc + purchase.price);
+
+    let stats = AdPurchaseStats {
+        total_purchases: total_purchases.try_into().unwrap(),
+        active_purchases: active_purchases.try_into().unwrap(),
+        total_revenue: total_revenue.try_into().unwrap(),
+    };
+
+    Ok(Json(stats))
+}
+
+pub async fn get_activity_report(
+    State(db): State<DatabaseConnection>,
+    Extension(current_user): Extension<user::Model>,
+) -> Result<impl IntoResponse, StatusCode> {
+    if !current_user.is_admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let report;
+    // Fetch recent activity data
+    let recent_activities = {
+        let recent_listings = listing::Entity::find()
+            .order_by(listing::Column::CreatedAt, Order::Desc)
+            .limit(5)
+            .all(&db)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;  
+
+        let recent_ad_purchases = ad_purchase::Entity::find()
+            .order_by(ad_purchase::Column::CreatedAt, Order::Desc)
+            .limit(5)
+            .all(&db)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        let recent_profiles = profile::Entity::find()
+            .order_by(profile::Column::CreatedAt, Order::Desc)
+            .limit(5)
+            .all(&db)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        let recent_users = user::Entity::find()
+            .order_by(user::Column::CreatedAt, Order::Desc)
+            .limit(5)
+            .all(&db)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        
+        let recent_accounts = account::Entity::find()
+            .order_by(account::Column::CreatedAt, Order::Desc)
+            .limit(5)
+            .all(&db)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        report = ActivityReport {
+            recent_listings,
+            recent_ad_purchases,
+            recent_profiles,
+            recent_users,
+            recent_accounts,
+        };
+    };
+    
+
+    Ok(Json(report))
+}
+
+pub async fn get_revenue_report(
+    State(db): State<DatabaseConnection>,
+    Extension(current_user): Extension<user::Model>,
+) -> Result<impl IntoResponse, StatusCode> {
+    if !current_user.is_admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    // Fetch revenue data total ad purchases by month
+    let revenue_data = {
+        let ad_purchases = ad_purchase::Entity::find()
+            .all(&db)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        let mut revenue_data: HashMap<String, f64> = HashMap::new();
+        
+        // ... populate revenue_data ...
+
+        revenue_data
+    };
+
+    Ok(Json(revenue_data))
+}   

@@ -67,7 +67,7 @@ pub async fn register_user(
     })?;
 
     // Step 4: Find or create the Profile for the directory
-    let profile = profile::Entity::find()
+    let profile: Option<profile::Model> = profile::Entity::find()
         .filter(profile::Column::DirectoryId.eq(directory_id))
         .one(&db)
         .await
@@ -75,6 +75,7 @@ pub async fn register_user(
             eprintln!("Database error when finding profile: {:?}", err);
             axum::http::StatusCode::INTERNAL_SERVER_ERROR
         })?;
+    let account_id = profile.clone().unwrap().account_id;
 
     let profile_id = if let Some(profile) = profile {
         profile.id
@@ -82,7 +83,7 @@ pub async fn register_user(
         // Create a new Profile if not found
         let new_profile = profile::ActiveModel {
             id: Set(Uuid::new_v4()),
-            account_id: Set(profile.unwrap().account_id),
+            account_id: Set(account_id.clone()),
             additional_info: Set(None),
             is_active: Set(true),
             directory_id: Set(directory_id),
@@ -104,7 +105,6 @@ pub async fn register_user(
 
         inserted_profile.id
     };
-    let account_id = profile.as_ref().unwrap().account_id.clone();
     // Step 5: Create the UserAccount to link user and profile
     let new_user_account = user_account::ActiveModel {
         id: Set(Uuid::new_v4()),

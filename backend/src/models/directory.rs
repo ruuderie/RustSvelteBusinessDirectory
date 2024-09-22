@@ -2,9 +2,10 @@ use chrono::{Utc, DateTime, Duration};
 use uuid::Uuid;
 use serde::{Serialize, Deserialize};
 use sea_orm::prelude::*;
+use sea_orm::ActiveValue::{Set, NotSet};
 use crate::entities::directory;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct DirectoryModel {
     pub id: Uuid,
     pub name: String,
@@ -27,4 +28,50 @@ impl From<directory::Model> for DirectoryModel {
             updated_at: model.updated_at,
     }
 }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DirectoryCreate {
+    pub name: String,
+    pub directory_type_id: Uuid,
+    pub domain: String,
+    pub description: String,
+}
+
+impl From<DirectoryCreate> for directory::ActiveModel {
+    fn from(input: DirectoryCreate) -> Self {
+        Self {
+            id: Set(Uuid::new_v4()),
+            name: Set(input.name),
+            directory_type_id: Set(input.directory_type_id),
+            domain: Set(input.domain),
+            description: Set(input.description),
+            created_at: Set(Utc::now()),
+            updated_at: Set(Utc::now()),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DirectoryUpdate {
+    pub id: Uuid,
+    pub name: String,
+    pub directory_type_id: Uuid,
+    pub domain: String,
+    pub description: String,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<DirectoryUpdate> for directory::ActiveModel {
+    fn from(input: DirectoryUpdate) -> Self {
+        Self {
+            id: Set(input.id),
+            name: Set(input.name),
+            directory_type_id: Set(input.directory_type_id),
+            domain: Set(input.domain),
+            description: Set(input.description),
+            updated_at: Set(Utc::now()),
+            created_at: NotSet,  // Add this line
+        }
+    }
 }
