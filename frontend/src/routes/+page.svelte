@@ -68,7 +68,7 @@
       const token = await loginUser(credentials);
       // Store the token in localStorage or a secure cookie
       localStorage.setItem('token', token);
-      user = { email: credentials.email }; // You might want to fetch user details here
+      user = { email: credentials.email }; // fetch user details here
       showLogin = false;
     } catch (err) {
       console.error('Error logging in:', err);
