@@ -20,14 +20,22 @@
 
 # Node modules
 /frontend/node_modules/
+/admin/node_modules/
+
 
 # Svelte build directory
 /frontend/public/build/
-
+/admin/public/build/
+# SvelteKit
+/frontend/.svelte-kit/
+/admin/.svelte-kit/
 # Environment variables
 /frontend/.env
 /frontend/.env.*
 !/frontend/.env.example
+/admin/.env
+/admin/.env.*
+!/admin/.env.example
 
 # General
 

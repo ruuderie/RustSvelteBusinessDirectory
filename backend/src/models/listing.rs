@@ -50,7 +50,7 @@ impl FromStr for ListingStatus {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ListingCreate {
     pub id: Uuid, 
     pub title: String,
@@ -111,7 +111,7 @@ impl IntoActiveModel<listing::ActiveModel> for ListingCreate {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ListingUpdate {
     pub profile_id: Uuid,
     pub directory_id: Uuid,
@@ -137,7 +137,6 @@ pub struct ListingUpdate {
     pub updated_at: DateTime<Utc>,
 }
 
-// Add this function at the end of the file
 fn deserialize_listing_status<'de, D>(deserializer: D) -> Result<ListingStatus, D::Error>
 where
     D: serde::Deserializer<'de>,

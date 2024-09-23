@@ -1,9 +1,24 @@
-<script lang="ts">
+<script>
   import { isAuthenticated, logout } from '$lib/auth';
   import { Button } from "$lib/components/ui/button";
   import { Avatar, AvatarFallback, AvatarImage } from "$lib/components/ui/avatar";
   import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '$lib/components/ui/dropdown-menu';
-  import { LogOut, UserPlus, Settings, HelpCircle, Command } from 'lucide-svelte';
+  import { LogOut, UserPlus, Settings, HelpCircle, Command, Sun, Moon } from 'lucide-svelte';
+  import { toggleMode } from "mode-watcher";
+  import { onMount } from 'svelte';
+
+  let darkMode;
+
+  onMount(() => {
+    darkMode = localStorage.getItem('darkMode') === 'true';
+    document.documentElement.classList.toggle('dark', darkMode);
+  });
+
+  function toggleDarkMode() {
+    darkMode = !darkMode;
+    document.documentElement.classList.toggle('dark', darkMode);
+    localStorage.setItem('darkMode', darkMode);
+  }
 </script>
 
 <header class="bg-background border-b border-border">
@@ -13,6 +28,11 @@
       <span>Oply Command Center</span>
     </a>
     <div class="flex items-center space-x-4">
+      <Button on:click={toggleDarkMode} variant="outline" size="icon">
+        <Sun class="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+        <Moon class="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+        <span class="sr-only">Toggle theme</span>
+      </Button>
       {#if $isAuthenticated}
         <Button variant="ghost" class="text-muted-foreground hover:text-foreground">
           <HelpCircle class="w-5 h-5 mr-2" />

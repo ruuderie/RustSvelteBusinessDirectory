@@ -1,10 +1,16 @@
 <script>
   import Header from '$lib/components/Header.svelte';
   import '../app.css';
+  import { ModeWatcher } from "mode-watcher";
   import { isAuthenticated, checkAuth } from '$lib/auth';
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
+
+  onMount(() => {
+    const darkMode = localStorage.getItem('darkMode') === 'true';
+    document.documentElement.classList.toggle('dark', darkMode);
+  });
 
   onMount(() => {
     if (browser) {

@@ -26,6 +26,18 @@ pub fn admin_routes(db: DatabaseConnection) -> Router<DatabaseConnection> {
                 // Directory management
                 .route("/directory-stats", get(admin::get_all_directory_stats))
                 .route("/directory-stats/:directory_id", get(admin::get_directory_stats))
+                .route("/directory/:directory_id/listings", get(admin::get_directory_listings))
+                .route("/directory/:directory_id/listings/:listing_id", get(admin::get_listing))
+                //ALL DIRECTORIES
+                .route("/directories", get(admin::get_directories))
+                //DIRETORY TYPE
+                .route("/directory-types", get(admin::get_directory_types))
+                //create directory type
+                .route("/directory-types", post(admin::create_directory_type))
+                //update directory type
+                .route("/directory-types/:directory_type_id", put(admin::update_directory_type))
+                //delete directory type
+                .route("/directory-types/:directory_type_id", delete(admin::delete_directory_type))
 
                 // Listing management
                 .route("/listings/pending", get(admin::list_pending_listings))

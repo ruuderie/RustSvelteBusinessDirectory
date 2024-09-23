@@ -30,7 +30,7 @@ impl From<directory::Model> for DirectoryModel {
 }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct DirectoryCreate {
     pub name: String,
     pub directory_type_id: Uuid,
@@ -52,7 +52,7 @@ impl From<DirectoryCreate> for directory::ActiveModel {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct DirectoryUpdate {
     pub id: Uuid,
     pub name: String,

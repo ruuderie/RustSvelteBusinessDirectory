@@ -1,6 +1,6 @@
 use crate::entities::{user, directory, listing, ad_purchase, profile, account, template, category, directory_type, listing_attribute};
 use axum::{
-    extract::{Extension, Json, Path, State},
+    extract::{Extension, Json, Path, State, Query},
     http::StatusCode,
     response::IntoResponse,
 };
@@ -9,7 +9,9 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use crate::models::listing::ListingStatus;
 use crate::models::ad_purchase::AdStatus;
+use crate::models::directory_type::{DirectoryTypeModel, CreateDirectoryType, UpdateDirectoryType};
 use std::collections::HashMap;
+use crate::handlers::{listings,directories,directory_types};
 
 #[derive(Deserialize)]
 pub struct UpdateUserInput {
@@ -60,7 +62,114 @@ pub struct ActivityReport {
     recent_accounts: Vec<account::Model>,
 }
 
+pub async fn get_directories(
+    State(db): State<DatabaseConnection>,
+    Extension(current_user): Extension<user::Model>,
+) -> Result<impl IntoResponse, StatusCode> {
+    tracing::info!("Getting directories via admin route");
+    if !current_user.is_admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let extension_db = Extension(db);
+    let directories = directories::get_directories(extension_db).await?;
+    Ok(directories)
+   
+}
 
+pub async fn create_directory_type(
+    State(db): State<DatabaseConnection>,
+    Extension(current_user): Extension<user::Model>,
+    Json(input): Json<CreateDirectoryType>,
+) -> Result<impl IntoResponse, StatusCode> {
+    tracing::info!("Creating directory type via admin route");
+    if !current_user.is_admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let state_db = State(db);
+    let input = Json(input);
+    let directory_type = directory_types::create_directory_type(state_db, input).await?;
+    Ok(directory_type)
+}
+
+
+pub async fn update_directory_type(
+    State(db): State<DatabaseConnection>,
+    Extension(current_user): Extension<user::Model>,
+    Path(directory_type_id): Path<Uuid>,
+    Json(input): Json<UpdateDirectoryType>,
+) -> Result<impl IntoResponse, StatusCode> {
+    tracing::info!("Updating directory type via admin route");
+    if !current_user.is_admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let state_db = State(db);
+    let path = Path(directory_type_id);
+    let input = Json(input);
+    let directory_type = directory_types::update_directory_type(path, state_db, input).await?;
+    Ok(directory_type)
+}
+
+
+pub async fn delete_directory_type(
+    State(db): State<DatabaseConnection>,
+    Extension(current_user): Extension<user::Model>,
+    Path(directory_type_id): Path<Uuid>,
+) -> Result<impl IntoResponse, StatusCode> {
+    tracing::info!("Deleting directory type via admin route");
+    if !current_user.is_admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let path = Path(directory_type_id);
+    let state_db = State(db);
+
+   
+
+    Ok(directory_types::delete_directory_type(path, state_db).await)
+}
+
+pub async fn get_directory_types(
+    State(db): State<DatabaseConnection>,
+    Extension(current_user): Extension<user::Model>,
+) -> Result<impl IntoResponse, StatusCode> {
+    if !current_user.is_admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let state_db = State(db);
+    let directory_types = directory_types::get_directory_types(state_db).await?;
+    Ok(directory_types)
+}
+
+pub async fn get_directory_listings(
+    State(db): State<DatabaseConnection>,
+    Extension(current_user): Extension<user::Model>,
+    Path(directory_id): Path<Uuid>,
+) -> Result<impl IntoResponse, StatusCode> {
+    if !current_user.is_admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    // extension database connection and query params
+    let extension_db = Extension(db);
+    let query_params = Query(HashMap::new());
+
+    let listings = listings::get_listings(extension_db, query_params).await?;
+    Ok(listings)
+}
+
+pub async fn get_listing(
+    State(db): State<DatabaseConnection>,
+    Extension(current_user): Extension<user::Model>,
+    Path((listing_id)): Path<(Uuid)>,
+) -> Result<impl IntoResponse, StatusCode> {
+    if !current_user.is_admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    //
+    let extension_db = Extension(db);
+    let path = Path((listing_id));
+
+    let listing = listings::get_listing_by_id(extension_db, path).await?;
+    Ok(listing)
+}
 
 pub async fn list_users(
     State(db): State<DatabaseConnection>,
