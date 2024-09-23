@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { isAuthenticated } from '$lib/auth';
+  import { isAuthenticated, checkAuth } from '$lib/auth';
   import { fetchDashboardStats } from '$lib/api';
   import { Users, ListChecks, DollarSign, BarChart2, Tag } from 'lucide-svelte';
   import { Button } from "$lib/components/ui/button";
@@ -39,17 +39,26 @@
     if (!$isAuthenticated) return;
     try {
       dashboardStats = await fetchDashboardStats();
-      // Update chart data with real data from dashboardStats
-      // This is just an example, adjust according to your actual data structure
-      chartData.datasets[0].data = dashboardStats.monthlyRevenue || chartData.datasets[0].data;
+      chartData = {
+        ...chartData,
+        datasets: [{
+          ...chartData.datasets[0],
+          data: dashboardStats.monthlyRevenue
+        }]
+      };
     } catch (error) {
       console.error('Failed to fetch dashboard stats:', error);
     }
   }
 
-  onMount(async () => {
+  $: if ($isAuthenticated) {
+    loadDashboardStats();
+  }
+
+  onMount(() => {
+    checkAuth();
     if ($isAuthenticated) {
-      await loadDashboardStats();
+      loadDashboardStats();
     }
   });
 </script>
@@ -75,7 +84,7 @@
           <Users class="h-4 w-4 text-muted-foreground" />
         </Card.Header>
         <Card.Content>
-          <div class="text-2xl font-bold">{dashboardStats?.totalUsers || '---'}</div>
+          <div class="text-2xl font-bold">{dashboardStats?.totalUsers?.toLocaleString() || '---'}</div>
         </Card.Content>
       </Card.Root>
       <Card.Root>
@@ -84,25 +93,25 @@
           <ListChecks class="h-4 w-4 text-muted-foreground" />
         </Card.Header>
         <Card.Content>
-          <div class="text-2xl font-bold">{dashboardStats?.activeListings || '---'}</div>
+          <div class="text-2xl font-bold">{dashboardStats?.activeListings?.toLocaleString() || '---'}</div>
         </Card.Content>
       </Card.Root>
       <Card.Root>
         <Card.Header class="flex flex-row items-center justify-between space-y-0 pb-2">
-          <Card.Title class="text-sm font-medium">Ad Sales</Card.Title>
+          <Card.Title class="text-sm font-medium">Ad Purchases</Card.Title>
           <DollarSign class="h-4 w-4 text-muted-foreground" />
         </Card.Header>
         <Card.Content>
-          <div class="text-2xl font-bold">{dashboardStats?.adSales || '---'}</div>
+          <div class="text-2xl font-bold">{dashboardStats?.adPurchases?.toLocaleString() || '---'}</div>
         </Card.Content>
       </Card.Root>
       <Card.Root>
         <Card.Header class="flex flex-row items-center justify-between space-y-0 pb-2">
-          <Card.Title class="text-sm font-medium">Total Categories</Card.Title>
-          <Tag class="h-4 w-4 text-muted-foreground" />
+          <Card.Title class="text-sm font-medium">Monthly Revenue</Card.Title>
+          <BarChart2 class="h-4 w-4 text-muted-foreground" />
         </Card.Header>
         <Card.Content>
-          <div class="text-2xl font-bold">{dashboardStats?.totalCategories || '---'}</div>
+          <div class="text-2xl font-bold">${dashboardStats?.revenue?.toLocaleString() || '---'}</div>
         </Card.Content>
       </Card.Root>
     </div>

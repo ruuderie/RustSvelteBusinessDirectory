@@ -6,7 +6,7 @@
     import { cn } from "$lib/utils";
     import { Lock, Loader2, UserPlus } from 'lucide-svelte';
     import { loginUserMock } from '$lib/api';
-    import { isAuthenticated } from '$lib/auth';  // Import the isAuthenticated store
+    import { goto } from '$app/navigation';
   
     const dispatch = createEventDispatcher();
   
@@ -27,12 +27,11 @@
       try {
         if (mode === 'login') {
           const token = await loginUserMock({ email, password });
-          localStorage.setItem('authToken', token);
-          isAuthenticated.set(true);  // Update the authentication state
+          login(token); // Use the login function from auth.js
           dispatch('login', { email, password });
+          goto('/'); // Redirect to home page after successful login
         } else {
           dispatch('register', { username, email, password });
-          console.log('Registration attempted:', { username, email, password });
         }
       } catch (error) {
         errorMessage = error.message;
@@ -82,9 +81,6 @@
             disabled={isLoading}
           />
         </div>
-        {#if errorMessage}
-          <p class="text-red-500 text-sm">{errorMessage}</p>
-        {/if}
         <Button type="submit" disabled={isLoading}>
           {#if isLoading}
             <Loader2 class="mr-2 h-4 w-4 animate-spin" />

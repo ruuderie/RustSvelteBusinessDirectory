@@ -29,15 +29,17 @@ export async function fetchDashboardStats() {
     throw new Error('User is not authenticated');
   }
 
-  // Return mock data
+  // Return mock data for a successful company
   return {
-    totalUsers: 10567,
-    activeListings: 3289,
-    adPurchases: 1456,
-    revenue: 287650.75,
-    userGrowth: [4000, 4500, 5200, 5800, 6500, 7200, 8100],
-    listingGrowth: [2400, 2800, 3200, 3600, 3900, 4200, 4500],
-    revenueGrowth: [50000, 60000, 75000, 90000, 110000, 130000, 150000]
+    totalUsers: 150000,
+    activeListings: 75000,
+    adPurchases: 12000,
+    revenue: 1800000,
+    totalCategories: 500,
+    monthlyRevenue: [1500000, 1550000, 1600000, 1650000, 1700000, 1750000, 1800000],
+    userGrowth: [120000, 125000, 130000, 135000, 140000, 145000, 150000],
+    listingGrowth: [60000, 62500, 65000, 67500, 70000, 72500, 75000],
+    adSalesGrowth: [9000, 9500, 10000, 10500, 11000, 11500, 12000]
   };
 }
 
