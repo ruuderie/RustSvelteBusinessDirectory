@@ -238,3 +238,47 @@ CROSS JOIN LATERAL (
         ('Insurance Services', 'Business Insurance')
 ) AS sub(parent_name, name)
 WHERE pc.name = sub.parent_name;
+
+-- Healthcare Categories
+WITH hc_parent_categories AS (
+    INSERT INTO category (id, directory_type_id, name, description, is_custom, is_active, created_at, updated_at)
+    VALUES
+    (gen_random_uuid(), (SELECT id FROM directory_type WHERE name = 'Healthcare'), 'Medical Services', 'Healthcare services', false, true, NOW(), NOW()),
+    (gen_random_uuid(), (SELECT id FROM directory_type WHERE name = 'Healthcare'), 'Pharmaceuticals', 'Pharmaceutical products and services', false, true, NOW(), NOW()),
+    (gen_random_uuid(), (SELECT id FROM directory_type WHERE name = 'Healthcare'), 'Medical Equipment', 'Medical equipment and supplies', false, true, NOW(), NOW()),
+    (gen_random_uuid(), (SELECT id FROM directory_type WHERE name = 'Healthcare'), 'Health Insurance', 'Health insurance products and services', false, true, NOW(), NOW()),
+    (gen_random_uuid(), (SELECT id FROM directory_type WHERE name = 'Healthcare'), 'Healthcare Consulting', 'Healthcare consulting services', false, true, NOW(), NOW())
+    RETURNING id, name
+)
+INSERT INTO category (id, directory_type_id, parent_category_id, name, description, is_custom, is_active, created_at, updated_at)
+SELECT 
+    gen_random_uuid(),
+    (SELECT id FROM directory_type WHERE name = 'Healthcare'),
+    pc.id,
+    sub.name,
+    'Subcategory of ' || pc.name,
+    false,
+    true,
+    NOW(),
+    NOW()
+FROM hc_parent_categories pc
+CROSS JOIN LATERAL (
+    VALUES 
+        ('Medical Services', 'Primary Care'),
+        ('Medical Services', 'Specialty Care'),
+        ('Medical Services', 'Emergency Services'),
+        ('Medical Services', 'Urgent Care'),
+        ('Medical Services', 'Mental Health Services'),
+        ('Medical Services', 'Physical Therapy'),
+        ('Medical Services', 'Chiropractic Services'),
+        ('Medical Services', 'Dental Services'),
+        ('Pharmaceuticals', 'Pharmaceutical Manufacturing'),
+        ('Pharmaceuticals', 'Pharmaceutical Distribution'),
+        ('Pharmaceuticals', 'Pharmaceutical Retail'),
+        ('Medical Equipment', 'Medical Imaging Equipment'),
+        ('Medical Equipment', 'Medical Laboratory Equipment'),
+        ('Medical Equipment', 'Medical Supplies'),
+        ('Medical Equipment', 'Medical Furniture'),
+        ('Medical Equipment', 'Medical Furniture')
+) AS sub(parent_name, name)
+WHERE pc.name = sub.parent_name;

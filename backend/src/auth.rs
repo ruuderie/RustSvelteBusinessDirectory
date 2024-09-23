@@ -11,6 +11,7 @@ use axum::{
 };
 use serde_json::json;
 use crate::entities::user::Model as UserModel;
+use tracing::debug;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -39,7 +40,9 @@ pub fn validate_jwt(token: &str) -> Result<Claims, jsonwebtoken::errors::Error> 
     let decoding_key = DecodingKey::from_secret("your-secret-key".as_ref());
     let validation = Validation::default();
 
+    tracing::debug!("Attempting to decode JWT");
     let token_data = decode::<Claims>(token, &decoding_key, &validation)?;
+    tracing::debug!("JWT decoded successfully");
     Ok(token_data.claims)
 }
 

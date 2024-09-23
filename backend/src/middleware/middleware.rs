@@ -13,18 +13,39 @@ pub async fn auth_middleware<B>(
     next: Next<B>,
 ) -> Result<Response, StatusCode> {
     tracing::debug!("Auth middleware called for path: {}", req.uri().path());
+
+    // Check if the route is public
+    if is_public_route(req.uri().path()) {
+        tracing::debug!("Public route detected, skipping authentication");
+        return Ok(next.run(req).await);
+    } else {
+        tracing::debug!("Private route detected, checking authentication");
+    }
+
+    
     // Extract the Authorization header
     let auth_header = req.headers().get(axum::http::header::AUTHORIZATION)
-        .ok_or(StatusCode::UNAUTHORIZED)?;
+        .ok_or_else(|| {
+            tracing::error!("No Authorization header found");
+            StatusCode::UNAUTHORIZED
+        })?;
 
     // Parse the token
     let token = auth_header.to_str()
-        .map_err(|_| StatusCode::UNAUTHORIZED)?
+        .map_err(|e| {
+            tracing::error!("Failed to parse Authorization header: {:?}", e);
+            StatusCode::UNAUTHORIZED
+        })?
         .trim_start_matches("Bearer ")
         .to_string();
 
     // Validate the token and extract claims
-    let claims = validate_jwt(&token).map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let claims = validate_jwt(&token).map_err(|e| {
+        tracing::error!("Failed to validate JWT: {:?}", e);
+        StatusCode::UNAUTHORIZED
+    })?;
+
+    tracing::debug!("JWT validated successfully for user: {}", claims.sub);
 
     // Fetch the user from the database
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| StatusCode::UNAUTHORIZED)?;
@@ -57,4 +78,20 @@ pub async fn auth_middleware<B>(
 
     // Proceed to the next handler
     Ok(next.run(req).await)
+}
+
+fn is_public_route(path: &str) -> bool {
+    tracing::debug!("Checking if path is public: {}", path);
+    // Add your public route patterns here
+    let public_routes = vec![
+        "/api/directories",
+        "/api/listings",
+        "/api/listing/",
+        "/api/login",
+        "/api/register",
+    ];
+
+    let is_public = public_routes.iter().any(|route| path.starts_with(route));
+    tracing::debug!("Path is public: {}", is_public);
+    is_public
 }

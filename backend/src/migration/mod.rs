@@ -11,6 +11,7 @@ mod m20230917_create_templates_table;
 mod m20230918_create_listings_table;
 mod m20230919_create_listing_attributes_table;
 mod m20230920_create_ad_purchases_table;
+mod m20240001_update_timestamp_migration;
 
 pub struct Migrator;
 
@@ -29,6 +30,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20230918_create_listings_table::Migration),
             Box::new(m20230919_create_listing_attributes_table::Migration),
             Box::new(m20230920_create_ad_purchases_table::Migration),
+            Box::new(m20240001_update_timestamp_migration::Migration),
         ]
     }
 }

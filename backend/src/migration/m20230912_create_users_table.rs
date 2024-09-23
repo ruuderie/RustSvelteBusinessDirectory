@@ -17,8 +17,8 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(User::PasswordHash).string().not_null())
                     .col(ColumnDef::new(User::IsAdmin).boolean().not_null().default(false))
                     .col(ColumnDef::new(User::IsActive).boolean().not_null().default(true))
-                    .col(ColumnDef::new(User::CreatedAt).timestamp().not_null())
-                    .col(ColumnDef::new(User::UpdatedAt).timestamp().not_null())
+                    .col(ColumnDef::new(User::CreatedAt).timestamp_with_time_zone().not_null())
+                    .col(ColumnDef::new(User::UpdatedAt).timestamp_with_time_zone().not_null())
                     .to_owned(),
             )
             .await

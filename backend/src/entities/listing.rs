@@ -32,7 +32,9 @@ pub struct Model {
     pub based_on_template_id: Option<Uuid>,
     pub is_ad_placement: bool,
     pub is_active: bool,
+    #[sea_orm(column_type = "TimestampWithTimeZone")]
     pub created_at: DateTime<Utc>,
+    #[sea_orm(column_type = "TimestampWithTimeZone")]
     pub updated_at: DateTime<Utc>,
 }
 

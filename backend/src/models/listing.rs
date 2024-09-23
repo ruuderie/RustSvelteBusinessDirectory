@@ -24,8 +24,8 @@ pub struct ListingModel {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, DeriveActiveEnum, Serialize, Deserialize, EnumIter)]
-#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "listing_status")]
+#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
+#[sea_orm(rs_type = "String", db_type = "String(Some(32))")]
 pub enum ListingStatus {
     #[sea_orm(string_value = "pending")]
     Pending,
@@ -33,6 +33,8 @@ pub enum ListingStatus {
     Approved,
     #[sea_orm(string_value = "rejected")]
     Rejected,
+    #[sea_orm(string_value = "active")]
+    Active,
 }
 
 impl FromStr for ListingStatus {

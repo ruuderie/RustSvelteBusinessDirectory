@@ -16,7 +16,7 @@
   }
 </script>
 
-<form on:submit|preventDefault={handleSubmit} class="space-y-4">
+<form on:submit|preventDefault={handleSubmit} class="space-y-4 bg-white p-6 rounded-lg shadow-md">
   <div>
     <Label for="username">Username</Label>
     <Input id="username" bind:value={username} required />
@@ -34,5 +34,12 @@
     <p class="text-red-500">{errorMessage}</p>
   {/if}
   
-  <Button type="submit">Register</Button>
+  <Button type="submit" class="w-full bg-blue-600 text-white py-2 rounded">Register</Button>
 </form>
+
+<style>
+  form {
+    max-width: 400px;
+    margin: 0 auto;
+  }
+</style>

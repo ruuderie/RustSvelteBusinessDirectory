@@ -14,7 +14,8 @@ use axum::{http, Router,
 use sea_orm::Database;
 use sea_orm_migration::MigratorTrait;
 use std::net::SocketAddr;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, CorsLayer};
+use axum::http::{HeaderName, HeaderValue, Method};
 use crate::admin::admin_routes;
 use crate::middleware::{auth_middleware, admin_middleware};
 use crate::api::create_router;
@@ -23,29 +24,33 @@ use crate::api::create_router;
 async fn main() {
     dotenv::dotenv().ok();
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    println!("Database URL: {}", database_url);
+    tracing::info!("Database URL: {}", database_url);
     let db = Database::connect(&database_url)
         .await
         .expect("Failed to connect to database");
 
-    println!("Database connection established");
+    tracing::info!("Database connection established");
 
     // Run migrations
     migration::Migrator::up(&db, None)
         .await
         .expect("Failed to run migrations");
-    println!("Migrations completed");
+    tracing::info!("Migrations completed");
 
-    println!("Successfully connected to the database and ran migrations");
+    tracing::info!("Successfully connected to the database and ran migrations");
 
     let frontend_url =
         std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5001".to_string());
-    println!("Frontend URL: {}", frontend_url);
+    tracing::info!("Frontend URL: {}", frontend_url);
 
     let cors = CorsLayer::new()
         .allow_origin(frontend_url.parse::<http::HeaderValue>().unwrap())
-        .allow_methods([http::Method::GET, http::Method::POST])
-        .allow_headers(Any);
+        .allow_methods([http::Method::GET, http::Method::POST, http::Method::PUT, http::Method::DELETE])
+        .allow_headers(vec![
+            HeaderName::from_static("content-type"),
+            HeaderName::from_static("authorization"),
+        ])
+        .allow_credentials(true);
 
     let app = Router::new()
         .nest("/api", create_router(db.clone()))
@@ -58,7 +63,7 @@ async fn main() {
         .layer(cors);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
-    println!("Listening on {}", addr);
+    tracing::info!("Listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await

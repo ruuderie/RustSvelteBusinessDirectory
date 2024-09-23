@@ -31,7 +31,7 @@ pub struct ListingSearch {
 pub fn public_routes() -> Router {
     Router::new()
         .route("/listings", get(get_listings))
-        .route("/listings/:id", get(get_listing_by_id))
+        .route("/listing/:id", get(get_listing_by_id))
         .route("/listings/search", get(search_listings))
 }
 
@@ -40,6 +40,7 @@ pub fn authenticated_routes() -> Router {
         .route("/listings", post(create_listing))
         .route("/listings/:id", put(update_listing))
         .route("/listings/:id", delete(delete_listing))
+        // Add other authenticated listing routes here
 }
 
 pub async fn get_listings(
@@ -67,6 +68,7 @@ pub async fn get_listing_by_id(
     Extension(db): Extension<DatabaseConnection>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<listing::Model>, StatusCode> {
+    tracing::info!("Fetching listing with ID: {}", id);
     let listing = Listing::find_by_id(id)
         .one(&db)
         .await
@@ -75,7 +77,7 @@ pub async fn get_listing_by_id(
             StatusCode::INTERNAL_SERVER_ERROR
         })?
         .ok_or(StatusCode::NOT_FOUND)?;
-
+    tracing::info!("Listing found: {:?}", listing);
     Ok(Json(listing))
 }
 

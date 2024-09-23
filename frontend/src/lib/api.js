@@ -54,13 +54,27 @@ export async function searchListings(query) {
 }
 
 export async function fetchListingById(id) {
-  console.log("Fetching listing details for id:", id);
-  const response = await fetch(`${API_URL}/listings/${id}`);
-  console.log("Response:", response);
+  const response = await fetch(`http://localhost:8000/api/listing/${id}`, {
+    credentials: 'include',
+  });
+  
+  console.log('Response:', response);
+  console.log('Response headers:', response.headers);
+  
   if (!response.ok) {
-    throw new Error("Failed to fetch business details");
+    throw new Error(`HTTP error! status: ${response.status}`);
   }
-  return response.json();
+  
+  const text = await response.text();
+  
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (e) {
+    console.error('Error parsing JSON:', e);
+    throw new Error('Invalid JSON in response');
+  }
+  return data;
 }
 
 export async function loginUser(credentials) {

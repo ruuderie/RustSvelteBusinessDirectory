@@ -14,8 +14,8 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(DirectoryType::Id).uuid().not_null().primary_key())
                     .col(ColumnDef::new(DirectoryType::Name).string().not_null())
                     .col(ColumnDef::new(DirectoryType::Description).string().not_null())
-                    .col(ColumnDef::new(DirectoryType::CreatedAt).timestamp().not_null())
-                    .col(ColumnDef::new(DirectoryType::UpdatedAt).timestamp().not_null())
+                    .col(ColumnDef::new(DirectoryType::CreatedAt).timestamp_with_time_zone().not_null())
+                    .col(ColumnDef::new(DirectoryType::UpdatedAt).timestamp_with_time_zone().not_null())
                     .to_owned(),
             )
             .await
