@@ -85,9 +85,6 @@
   }
 </script>
 
-<svelte:head>
-  <title>Business Directory</title>
-</svelte:head>
 
 {#if !$isProduction}
   <DirectorySelector />
@@ -98,7 +95,6 @@
 {/if}
 
 <div class="container mx-auto px-4 py-8">
-  <h1 class="text-3xl font-bold text-center mb-8">Business Directory</h1>
   {#if user}
     <div class="mb-4">
       <p>Welcome, {user.email}!</p>

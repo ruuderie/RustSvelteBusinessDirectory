@@ -4,7 +4,7 @@
 
 <header class="bg-blue-600 text-white p-4">
   <nav class="container mx-auto flex justify-between items-center">
-    <a href="/" class="text-2xl font-bold">Business Directory</a>
+    <a href="/" class="text-2xl font-bold">Builder Connect</a>
     <div>
       {#if $isAuthenticated}
         <button on:click={logout} class="ml-4">Logout</button>
