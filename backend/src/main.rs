@@ -39,12 +39,19 @@ async fn main() {
 
     tracing::info!("Successfully connected to the database and ran migrations");
 
-    let frontend_url =
+    let directory_client =
         std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5001".to_string());
-    tracing::info!("Frontend URL: {}", frontend_url);
+    //add 5150 localhost to allow origin as well
+    let admin_client = "http://localhost:5150".parse::<HeaderValue>().unwrap();
+    let allow_origin = AllowOrigin::list(vec![
+        directory_client.parse::<HeaderValue>().unwrap(),
+        admin_client.clone(),
+    ]);
+    tracing::info!("Directory URL: {}", directory_client);
+    tracing::info!("Admin URL: {:?}", admin_client);
 
     let cors = CorsLayer::new()
-        .allow_origin(frontend_url.parse::<http::HeaderValue>().unwrap())
+        .allow_origin(allow_origin)
         .allow_methods([http::Method::GET, http::Method::POST, http::Method::PUT, http::Method::DELETE])
         .allow_headers(vec![
             HeaderName::from_static("content-type"),
@@ -54,11 +61,7 @@ async fn main() {
 
     let app = Router::new()
         .nest("/api", create_router(db.clone()))
-       /*  .nest(
-            "/admin",
-            admin_routes(db.clone())
-                .layer(from_fn(admin_middleware))
-        ) */
+        .nest("/admin", admin_routes(db.clone()).with_state(db.clone()).layer(from_fn(admin_middleware)))
         .layer(from_fn_with_state(db.clone(), auth_middleware))
         .layer(cors);
 

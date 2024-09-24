@@ -7,6 +7,7 @@
     import { Lock, Loader2, UserPlus } from 'lucide-svelte';
     import { loginUserMock } from '$lib/api';
     import { goto } from '$app/navigation';
+    import { login } from '$lib/auth';
   
     const dispatch = createEventDispatcher();
   
@@ -27,7 +28,7 @@
       try {
         if (mode === 'login') {
           const token = await loginUserMock({ email, password });
-          login(token); // Use the login function from auth.js
+          await login(token); // Use the login function from auth.js
           dispatch('login', { email, password });
           goto('/'); // Redirect to home page after successful login
         } else {
