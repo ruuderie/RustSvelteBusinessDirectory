@@ -58,6 +58,12 @@ pub async fn auth_middleware<B>(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
+    // Check if the user is an admin
+    if !is_admin(&user, &db).await {
+        tracing::error!("User is not an admin");
+        return Err(StatusCode::FORBIDDEN);
+    }
+
     // Fetch the user's profiles and their associated directories
     let user_accounts = user_account::Entity::find()
         .filter(user_account::Column::UserId.eq(user.id))
@@ -78,6 +84,10 @@ pub async fn auth_middleware<B>(
 
     // Proceed to the next handler
     Ok(next.run(req).await)
+}
+
+async fn is_admin(user: &user::Model, db: &DatabaseConnection) -> bool {
+    user.is_admin
 }
 
 fn is_public_route(path: &str) -> bool {

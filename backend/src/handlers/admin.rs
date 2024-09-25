@@ -480,6 +480,35 @@ pub async fn list_active_ad_purchases(
     Ok(Json(active_purchases))
 }
 
+pub async fn get_ad_purchase(
+    State(db): State<DatabaseConnection>,
+    Extension(current_user): Extension<user::Model>,
+    Path(purchase_id): Path<Uuid>,
+) -> Result<impl IntoResponse, StatusCode> {
+    if !current_user.is_admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let purchase = ad_purchase::Entity::find_by_id(purchase_id)
+        .one(&db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    Ok(Json(purchase))
+}
+
+pub async fn list_ad_purchases(
+    State(db): State<DatabaseConnection>,
+    Extension(current_user): Extension<user::Model>,
+) -> Result<impl IntoResponse, StatusCode> {
+    if !current_user.is_admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let purchases = ad_purchase::Entity::find().all(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?; 
+    Ok(Json(purchases))
+}
 pub async fn cancel_ad_purchase(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,

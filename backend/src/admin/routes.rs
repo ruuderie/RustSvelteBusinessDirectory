@@ -46,6 +46,8 @@ pub fn admin_routes(db: DatabaseConnection) -> Router<DatabaseConnection> {
 
                 // Ad purchase management
                 .route("/ad-purchases/stats", get(admin::get_ad_purchase_stats))
+                .route("/ad-purchases", get(admin::list_ad_purchases))
+                .route("/ad-purchases/:purchase_id", get(admin::get_ad_purchase))
                 .route("/ad-purchases/active", get(admin::list_active_ad_purchases))
                 .route("/ad-purchases/:purchase_id/cancel", post(admin::cancel_ad_purchase))
 

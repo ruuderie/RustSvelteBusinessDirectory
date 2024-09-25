@@ -5,7 +5,7 @@
     import { Label } from "$lib/components/ui/label";
     import { cn } from "$lib/utils";
     import { Lock, Loader2, UserPlus } from 'lucide-svelte';
-    import { loginUserMock } from '$lib/api';
+    import { loginUser, registerUser } from '$lib/api'; // Import both loginUser and registerUser
     import { goto } from '$app/navigation';
     import { login } from '$lib/auth';
   
@@ -27,12 +27,15 @@
       
       try {
         if (mode === 'login') {
-          const token = await loginUserMock({ email, password });
-          await login(token); // Use the login function from auth.js
+          const data = await loginUser({ email, password });
+          login(data.token); // Use the login function from auth.js
           dispatch('login', { email, password });
           goto('/'); // Redirect to home page after successful login
         } else {
+          const data = await registerUser({ username, email, password });
+          login(data.token); // Log in the user after successful registration
           dispatch('register', { username, email, password });
+          goto('/'); // Redirect to home page after successful registration
         }
       } catch (error) {
         errorMessage = error.message;

@@ -18,6 +18,7 @@ pub struct Claims {
     pub sub: String,           // User ID
     pub profile_id: String,    // Profile ID
     pub directory_id: String,  // Directory ID
+    pub is_admin: bool,        // Admin flag
     pub exp: usize,            // Expiration time
 }
 
@@ -29,7 +30,20 @@ pub fn verify_password(password: &str, hash: &str) -> Result<bool, bcrypt::Bcryp
     verify(password, hash)
 }
 
-pub fn generate_jwt(claims: Claims) -> Result<String, jsonwebtoken::errors::Error> {
+pub fn generate_jwt(user: &user::Model) -> Result<String, jsonwebtoken::errors::Error> {
+    let expiration = Utc::now()
+        .checked_add_signed(Duration::hours(24))
+        .expect("valid timestamp")
+        .timestamp();
+
+    let claims = Claims {
+        sub: user.id.to_string(),
+        profile_id: "default".to_string(), // Update this as needed
+        directory_id: "default".to_string(), // Update this as needed
+        is_admin: user.is_admin,
+        exp: expiration as usize,
+    };
+
     let header = Header::default();
     let encoding_key = EncodingKey::from_secret("your-secret-key".as_ref());
 

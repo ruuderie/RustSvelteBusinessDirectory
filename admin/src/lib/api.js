@@ -8,6 +8,14 @@ console.log("API_URL:", API_URL);
 
 // File: src/lib/api.js
 
+function getAuthHeaders() {
+  const token = localStorage.getItem('authToken');
+  return {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json',
+  };
+}
+
 export async function loginUserMock({ email, password }) {
   // Simulate API call
   await new Promise(resolve => setTimeout(resolve, 1000));
@@ -69,7 +77,9 @@ export async function fetchListings() {
   if (!directoryId) {
     throw new Error("No directory selected");
   }
-  const response = await fetch(`${API_URL}/listings?directory_id=${directoryId}`);
+  const response = await fetch(`${API_URL}/listings?directory_id=${directoryId}`, {
+    headers: getAuthHeaders(),
+  });
   console.log("Response:", response);
   if (!response.ok) {
     throw new Error("Failed to fetch businesses");
@@ -82,10 +92,23 @@ export async function searchListings(query) {
   if (!directoryId) {
     throw new Error("No directory selected");
   }
-  const response = await fetch(`${API_URL}/listings/search?q=${query}&directory_id=${directoryId}`);
+  const response = await fetch(`${API_URL}/listings/search?q=${query}&directory_id=${directoryId}`, {
+    headers: getAuthHeaders(),
+  });
   console.log("Response:", response);
   if (!response.ok) {
     throw new Error("Failed to search listings");
+  }
+  return response.json();
+}
+
+export async function fetchAdPurchases() {
+  console.log("Fetching ad purchases");
+  const response = await fetch(`${API_URL}/ad-purchases`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    throw new Error("Failed to fetch ad purchases");
   }
   return response.json();
 }
