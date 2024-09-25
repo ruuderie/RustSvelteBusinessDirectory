@@ -94,11 +94,11 @@ fn is_public_route(path: &str) -> bool {
     tracing::debug!("Checking if path is public: {}", path);
     // Add your public route patterns here
     let public_routes = vec![
-        "/api/directories",
+        "/api/directories", //still unsure if this should be public but we keep it for now.
         "/api/listings",
         "/api/listing/",
-        "/api/login",
-        "/api/register",
+        "/api/users/login",
+        "/api/users/register",
     ];
 
     let is_public = public_routes.iter().any(|route| path.starts_with(route));

@@ -171,15 +171,9 @@ pub async fn login_user(
         if let Some((user_account, profiles)) = user_account {
             let profile = profiles.first().unwrap(); // Safe because we checked in the find()
             
-            // Generate JWT including user_id, profile_id, and directory_id
-            let claims = Claims {
-                sub: user.id.to_string(),
-                profile_id: profile.id.to_string(),
-                directory_id: profile.directory_id.to_string(),
-                exp: (Utc::now() + Duration::hours(24)).timestamp() as usize,
-            };
 
-            let token = generate_jwt(claims)
+
+            let token = generate_jwt(&user, &profile)
                 .map_err(|err| {
                     tracing::error!("Error generating JWT: {:?}", err);
                     StatusCode::INTERNAL_SERVER_ERROR
