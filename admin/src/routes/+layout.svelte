@@ -2,7 +2,8 @@
   import Header from '$lib/components/Header.svelte';
   import '../app.css';
   import { ModeWatcher } from "mode-watcher";
-  import { isAuthenticated, checkAuth } from '$lib/auth';
+  import {isAuthenticated } from '$lib/stores/authStore'
+  import {  checkAuth } from '$lib/auth';
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';

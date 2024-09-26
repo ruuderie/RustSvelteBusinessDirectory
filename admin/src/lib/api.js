@@ -1,10 +1,15 @@
 import { get } from 'svelte/store';
 import { effectiveDirectoryId, isProduction } from './stores/directoryStore';
 
-// pull env variables from .env
-const API_URL = import.meta.env.API_URL || "http://localhost:8000/api";
+let BASE_URL;
+if (import.meta.env.BASE_URL && import.meta.env.BASE_URL !== '/') {
+  BASE_URL = import.meta.env.BASE_URL;
+} else {
+  BASE_URL = "http://localhost:8000";
+}
 
-console.log("API_URL:", API_URL);
+// pull env variables from .env
+const API_URL = import.meta.env.API_URL || `${BASE_URL}/api`;
 
 // File: src/lib/api.js
 
@@ -44,8 +49,8 @@ export async function fetchDashboardStats() {
     adPurchases: 12000,
     revenue: 1800000,
     totalCategories: 500,
-    monthlyRevenue: [1500000, 1550000, 1600000, 1650000, 1700000, 1750000, 1800000],
-    userGrowth: [120000, 125000, 130000, 135000, 140000, 145000, 150000],
+    monthlyRevenue: [500000, 750000, 800000, 1250000, 1400000, 1750000, 2050000],
+    userGrowth: [60000, 80000, 94250, 101250, 115741, 135741, 168521],
     listingGrowth: [60000, 62500, 65000, 67500, 70000, 72500, 75000],
     adSalesGrowth: [9000, 9500, 10000, 10500, 11000, 11500, 12000]
   };
@@ -103,8 +108,9 @@ export async function searchListings(query) {
 }
 
 export async function fetchAdPurchases() {
-  console.log("Fetching ad purchases");
-  const response = await fetch(`${API_URL}/ad-purchases`, {
+  let url = `${API_URL}/admin/ad-purchases`;
+  console.log("Fetching ad purchases from:", url);
+  const response = await fetch(url, {
     headers: getAuthHeaders(),
   });
   if (!response.ok) {
@@ -114,49 +120,49 @@ export async function fetchAdPurchases() {
 }
 
 export async function fetchListingById(id) {
-  const response = await fetch(`http://localhost:8000/api/listing/${id}`, {
-    credentials: 'include',
+  const response = await fetch(`${API_URL}/admin/listings/${id}`, {
+    headers: getAuthHeaders(),
   });
   
-  console.log('Response:', response);
-  console.log('Response headers:', response.headers);
-  
   if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    const error = new Error(`HTTP error! status: ${response.status}`);
+    error.status = response.status;
+    throw error;
   }
   
-  const text = await response.text();
-  
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch (e) {
-    console.error('Error parsing JSON:', e);
-    throw new Error('Invalid JSON in response');
-  }
-  return data;
+  return response.json();
 }
 
 export async function loginUser(credentials) {
-  console.log("Logging in user");
-  const response = await fetch(`${API_URL}/login`, {
+  console.log("Attempting to log in user:", credentials.email);
+  console.log("Login URL:", `${BASE_URL}/login`);
+  const response = await fetch(`${BASE_URL}/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(credentials),
   });
+  
+  console.log("Login response status:", response.status);
+  
   if (!response.ok) {
-    const error = new Error('Failed to login');
+    const errorData = await response.json();
+    console.error("Login error:", errorData);
+    const error = new Error(errorData.message || 'Failed to login');
     error.status = response.status;
+    error.details = errorData.errors;
     throw error;
   }
-  return response.json();
+  
+  const data = await response.json();
+  console.log("Login successful, received data:", data);
+  return data;
 }
 
 export async function registerUser(userData) {
   console.log("Registering user");
-  const response = await fetch(`${API_URL}/register`, {
+  const response = await fetch(`${BASE_URL}/register`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

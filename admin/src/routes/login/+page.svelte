@@ -26,7 +26,7 @@
           Enter your credentials to access the Oply Command Center
         </p>
       </div>
-      <UserAuthForm />
+      <UserAuthForm mode="login" />
       <p class="px-8 text-center text-sm text-muted-foreground">
         By logging in, you agree to our
         <a href="/terms" class="underline underline-offset-4 hover:text-primary">Terms of Service</a>

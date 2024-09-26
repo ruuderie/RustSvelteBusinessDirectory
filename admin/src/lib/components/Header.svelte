@@ -1,5 +1,5 @@
 <script>
-  import { isAuthenticated, logout } from '$lib/auth';
+  import { isAuthenticated } from '$lib/stores/authStore';
   import { Button } from "$lib/components/ui/button";
   import { Avatar, AvatarFallback, AvatarImage } from "$lib/components/ui/avatar";
   import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '$lib/components/ui/dropdown-menu';

@@ -20,17 +20,23 @@
     let email = '';
     let password = '';
     let errorMessage = '';
-  
+    let errorDetails = {};
+
     async function onSubmit() {
       isLoading = true;
       errorMessage = '';
+      errorDetails = {};
       
       try {
         if (mode === 'login') {
           const data = await loginUser({ email, password });
-          login(data.token); // Use the login function from auth.js
-          dispatch('login', { email, password });
-          goto('/'); // Redirect to home page after successful login
+          if (data.token) {
+            login(data.token); // Use the login function from auth.js
+            dispatch('login', { email, password });
+            goto('/'); // Redirect to home page after successful login
+          } else {
+            throw new Error('Login successful, but no token received');
+          }
         } else {
           const data = await registerUser({ username, email, password });
           login(data.token); // Log in the user after successful registration
@@ -39,6 +45,9 @@
         }
       } catch (error) {
         errorMessage = error.message;
+        if (error.details) {
+          errorDetails = error.details;
+        }
       } finally {
         isLoading = false;
       }
@@ -46,6 +55,20 @@
   </script>
   
   <div class={cn("grid gap-6", className)} {...$$restProps}>
+    {#if errorMessage}
+      <div class="text-red-500">
+        <p>{errorMessage}</p>
+        {#if Object.keys(errorDetails).length > 0}
+          <ul class="list-disc list-inside mt-2">
+            {#each Object.entries(errorDetails) as [field, messages]}
+              {#each messages as message}
+                <li>{field}: {message}</li>
+              {/each}
+            {/each}
+          </ul>
+        {/if}
+      </div>
+    {/if}
     <form on:submit|preventDefault={onSubmit}>
       <div class="grid gap-2">
         {#if mode === 'register'}

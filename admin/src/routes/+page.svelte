@@ -1,7 +1,8 @@
 <script>
   import { onMount } from 'svelte';
-  import { isAuthenticated, checkAuth } from '$lib/auth';
+  import { checkAuth } from '$lib/auth';
   import { fetchDashboardStats } from '$lib/api';
+  import { isAuthenticated } from '$lib/stores/authStore';
   import { Users, ListChecks, DollarSign, BarChart2, Tag } from 'lucide-svelte';
   import { Button } from "$lib/components/ui/button";
   import * as Card from "$lib/components/ui/card";

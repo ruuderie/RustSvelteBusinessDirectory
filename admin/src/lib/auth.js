@@ -2,7 +2,6 @@ import { writable } from 'svelte/store';
 import { browser } from '$app/environment';
 import { isAuthenticated } from './stores/authStore';
 
-export const isAuthenticated = writable(false);
 
 export function login(token) {
   if (browser) {
