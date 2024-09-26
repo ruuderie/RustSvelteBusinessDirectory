@@ -16,13 +16,22 @@ use sea_orm_migration::MigratorTrait;
 use std::net::SocketAddr;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use axum::http::{HeaderName, HeaderValue, Method};
-use crate::admin::admin_routes;
-use crate::middleware::{auth_middleware, admin_middleware};
+use crate::middleware::{auth_middleware};
 use crate::api::create_router;
 use crate::admin::setup::create_admin_user_if_not_exists;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() {
+    // Set up tracing
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::new(
+            std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
+        ))
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    // Rest of your main function
     dotenv::dotenv().ok();
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let admin_email = std::env::var("ADMIN_USER").expect("ADMIN_USER must be set");
@@ -31,13 +40,13 @@ async fn main() {
         .unwrap_or_else(|_| "true".to_string())
         .parse::<bool>()
         .unwrap_or(true);
-
+    tracing::info!("Create admin on startup: {}", create_admin);
     tracing::info!("Database URL: {}", database_url);
+
+    // Connect to the database
     let db = Database::connect(&database_url)
         .await
-        .expect("Failed to connect to database");
-
-    tracing::info!("Database connection established");
+        .expect("Failed to connect to the database");
 
     // Run migrations
     migration::Migrator::up(&db, None)
@@ -47,6 +56,8 @@ async fn main() {
 
     // Create admin user if flag is set
     if create_admin {
+        tracing::info!("Verifying Admin");
+        println!("Verifying Admin");
         match create_admin_user_if_not_exists(&db, &admin_email, &admin_password).await {
             Ok(_) => tracing::info!("Admin user setup completed"),
             Err(e) => tracing::error!("Failed to set up admin user: {:?}", e),
@@ -76,9 +87,7 @@ async fn main() {
         .allow_credentials(true);
 
     let app = Router::new()
-        .nest("/api", create_router(db.clone()))
-        .nest("/admin", admin_routes(db.clone()).with_state(db.clone()).layer(from_fn(admin_middleware)))
-        .layer(from_fn_with_state(db.clone(), auth_middleware))
+        .merge(create_router(db.clone()))
         .layer(cors);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));

@@ -1,5 +1,6 @@
 use jsonwebtoken::{encode, decode, Header, Validation, EncodingKey, DecodingKey};
 use serde::{Serialize, Deserialize};
+use serde::de::DeserializeOwned;
 use chrono::{Utc, Duration};
 use bcrypt::{hash, verify, DEFAULT_COST};
 use crate::entities::{profile, user};
@@ -22,11 +23,19 @@ pub struct Claims {
     pub exp: usize,            // Expiration time
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ClaimsAdmin {
+    pub sub: String,           // User ID
+    pub is_admin: bool,        // Admin flag
+    pub exp: usize,            // Expiration time
+}
+
 pub fn hash_password(password: &str) -> Result<String, bcrypt::BcryptError> {
     hash(password, DEFAULT_COST)
 }
 
 pub fn verify_password(password: &str, hash: &str) -> Result<bool, bcrypt::BcryptError> {
+    tracing::debug!("Verifying password");
     verify(password, hash)
 }
 
@@ -50,14 +59,34 @@ pub fn generate_jwt(user: &user::Model, profile: &profile::Model) -> Result<Stri
 
     encode(&header, &claims, &encoding_key)
 }
+pub fn generate_jwt_admin(user: &user::Model) -> Result<String, jsonwebtoken::errors::Error> {
+    let expiration = Utc::now()
+        .checked_add_signed(Duration::hours(24))
+        .expect("valid timestamp")
+        .timestamp();
 
-pub fn validate_jwt(token: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
+    let claims = ClaimsAdmin {
+        sub: user.id.to_string(),
+        exp: expiration as usize,
+        is_admin: user.is_admin,
+    };
+
+    let header = Header::default();
+    let encoding_key = EncodingKey::from_secret("your-secret-key".as_ref());
+
+    encode(&header, &claims, &encoding_key)
+}
+
+pub fn validate_jwt<T: DeserializeOwned>(token: &str) -> Result<T, jsonwebtoken::errors::Error> {
     let decoding_key = DecodingKey::from_secret("your-secret-key".as_ref());
     let validation = Validation::default();
 
     tracing::debug!("Attempting to decode JWT");
-    let token_data = decode::<Claims>(token, &decoding_key, &validation)?;
-    tracing::debug!("JWT decoded successfully");
+    tracing::debug!("Token: {}", token);
+    tracing::debug!("Validation: {:?}", validation);
+
+    let token_data = decode::<T>(token, &decoding_key, &validation)?;
+    tracing::debug!("JWT decoded successfully for {:?}", std::any::type_name::<T>());
     Ok(token_data.claims)
 }
 

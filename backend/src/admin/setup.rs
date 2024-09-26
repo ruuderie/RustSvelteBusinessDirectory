@@ -14,7 +14,6 @@ pub async fn create_admin_user_if_not_exists(
         .filter(user::Column::Email.eq(email))
         .one(db)
         .await?;
-
     if existing_admin.is_none() {
         // Create the admin user
         let hashed_password = hash_password(password)?;
@@ -32,6 +31,7 @@ pub async fn create_admin_user_if_not_exists(
         user::Entity::insert(new_admin).exec(db).await?;
         tracing::info!("Admin user created successfully");
     } else {
+        println!("Admin Found");
         tracing::info!("Admin user already exists");
     }
 

@@ -5,21 +5,48 @@ use crate::entities::{
     user_account::{self, Entity as UserAccount},
 };
 use axum::{
-    extract::{Extension, Json},
+    extract::{Extension, Json, Path},
     http::StatusCode,
-    routing::{post},
+    routing::{post, get},
     Router,
 };
+use serde::{Deserialize, Serialize};
+use crate::auth::{hash_password, verify_password, generate_jwt, generate_jwt_admin};
 use crate::models::user::{UserLogin, UserRegistration};
+use crate::handlers::profiles::get_profile_by_id;
 use sea_orm::{DatabaseConnection, EntityTrait, Set, ColumnTrait, QueryFilter, ActiveModelTrait};
 use uuid::Uuid;
 use chrono::{Utc, Duration};
-use crate::auth::{hash_password, verify_password, generate_jwt, Claims};
 
-pub fn public_routes() -> Router {
+#[derive(Deserialize)]
+pub struct LoginCredentials {
+    email: String,
+    password: String,
+}
+
+#[derive(Serialize)]
+pub struct LoginResponse {
+    token: String,
+}
+
+pub fn auth_routes() -> Router {
     Router::new()
-        .route("/register", post(register_user))
         .route("/login", post(login_user))
+        .route("/register", post(register_user))
+}
+
+pub fn authenticated_routes() -> Router {
+    Router::new()
+        // We can add any user-related routes that require authentication
+        .route("/profile", get(get_user_profile))
+}
+
+pub async fn get_user_profile(
+    Extension(db): Extension<DatabaseConnection>,
+    Extension(current_user): Extension<user::Model>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<profile::Model>, StatusCode> {
+    get_profile_by_id(Extension(db), Extension(current_user), Path(id)).await
 }
 
 pub async fn register_user(
@@ -134,58 +161,74 @@ pub async fn register_user(
 
 pub async fn login_user(
     Extension(db): Extension<DatabaseConnection>,
-    Json(login_data): Json<UserLogin>,
-) -> Result<Json<String>, StatusCode> {
-    tracing::info!("Received login request for email: {} in directory: {}", login_data.email, login_data.directory_id);
-
-    // Find the user by email
-    let user = User::find()
-        .filter(user::Column::Email.eq(&login_data.email))
+    Json(credentials): Json<LoginCredentials>,
+) -> Result<Json<LoginResponse>, StatusCode> {
+    tracing::info!("Login attempt for email: {}", credentials.email);
+    
+    let user = match user::Entity::find()
+        .filter(user::Column::Email.eq(credentials.email.clone()))
         .one(&db)
         .await
-        .map_err(|err| {
-            tracing::error!("Error fetching user: {:?}", err);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .ok_or(StatusCode::UNAUTHORIZED)?;
-
-    // Verify password
-    if verify_password(&login_data.password, &user.password_hash)
-        .map_err(|err| {
-            tracing::error!("Error verifying password: {:?}", err);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
     {
-        tracing::info!("User authenticated");
+        Ok(Some(user)) => user,
+        Ok(None) => {
+            tracing::warn!("User not found for email: {}", credentials.email);
+            return Err(StatusCode::UNAUTHORIZED);
+        },
+        Err(e) => {
+            tracing::error!("Database error when finding user: {:?}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    tracing::info!("User found with id: {}", user.id);
 
-        // Fetch user's profile for the specified directory
+    match verify_password(&credentials.password, &user.password_hash) {
+        Ok(true) => tracing::info!("Password verified successfully"),
+        Ok(false) => {
+            tracing::warn!("Invalid password for user: {}", user.id);
+            return Err(StatusCode::UNAUTHORIZED);
+        },
+        Err(e) => {
+            tracing::error!("Error verifying password: {:?}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    //if the user is not an admin, proceed as normal
+    if !user.is_admin {
+        tracing::info!("User is not an admin, proceeding as normal");
+        //get the user's account id
         let user_account = user_account::Entity::find()
             .filter(user_account::Column::UserId.eq(user.id))
-            .find_with_related(profile::Entity)
-            .all(&db)
+            .one(&db)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-            .into_iter()
-            .find(|(_, profiles)| profiles.first().map_or(false, |p| p.directory_id == login_data.directory_id));
+            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
-        if let Some((user_account, profiles)) = user_account {
-            let profile = profiles.first().unwrap(); // Safe because we checked in the find()
             
+        // Fetch the user's profile
+        let profile = profile::Entity::find()
+            .filter(profile::Column::AccountId.eq(user_account.account_id))
+            .one(&db)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
+        let token = generate_jwt(&user, &profile)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-            let token = generate_jwt(&user, &profile)
-                .map_err(|err| {
-                    tracing::error!("Error generating JWT: {:?}", err);
-                    StatusCode::INTERNAL_SERVER_ERROR
-                })?;
-
-            Ok(Json(token))
-        } else {
-            tracing::warn!("User not associated with the specified directory");
-            Err(StatusCode::FORBIDDEN)
-        }
+        Ok(Json(LoginResponse { token }))
     } else {
-        tracing::warn!("User authentication failed");
-        Err(StatusCode::UNAUTHORIZED)
+        //NOTE: admins don't need a profile, so we can skip the profile part but in the future 
+        // we will need to add a profile to the NON-ROOT admin users
+        // users who administer one or more directories and not the entire application
+        
+        tracing::info!("User is an admin, generating admin token");
+
+        //if the user is an admin, generate a different token
+        let token = generate_jwt_admin(&user)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        Ok(Json(LoginResponse { token }))
     }
 }
