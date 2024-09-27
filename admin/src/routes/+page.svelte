@@ -40,6 +40,7 @@
     if (!$isAuthenticated) return;
     try {
       dashboardStats = await fetchDashboardStats();
+      console.log(dashboardStats);
       chartData = {
         ...chartData,
         datasets: [{

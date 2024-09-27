@@ -1,5 +1,6 @@
 import { get } from 'svelte/store';
 import { effectiveDirectoryId, isProduction } from './stores/directoryStore';
+import { env } from './stores/authStore';
 
 let BASE_URL;
 if (import.meta.env.BASE_URL && import.meta.env.BASE_URL !== '/') {
@@ -11,8 +12,23 @@ if (import.meta.env.BASE_URL && import.meta.env.BASE_URL !== '/') {
 // pull env variables from .env
 const API_URL = import.meta.env.API_URL || `${BASE_URL}/api`;
 
-// File: src/lib/api.js
+// Add a new function to refresh the token
+async function refreshToken() {
+  const response = await fetch(`${BASE_URL}/refresh-token`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
 
+  if (!response.ok) {
+    throw new Error('Failed to refresh token');
+  }
+
+  const data = await response.json();
+  localStorage.setItem('authToken', data.token);
+  return data.token;
+}
+
+// Modify the getAuthHeaders function to use the refreshed token
 function getAuthHeaders() {
   const token = localStorage.getItem('authToken');
   return {
@@ -21,75 +37,66 @@ function getAuthHeaders() {
   };
 }
 
-export async function loginUserMock({ email, password }) {
-  // Simulate API call
-  await new Promise(resolve => setTimeout(resolve, 1000));
+// Create a wrapper function for API calls that handles token refreshing
+async function apiCall(url, options = {}) {
+  options.headers = { ...options.headers, ...getAuthHeaders() };
   
-  if (email === 'admin@oply.co' && password === 'password') {
-    return 'mock-jwt-token';
-  } else {
-    throw new Error('Invalid credentials');
+  try {
+    let response = await fetch(url, options);
+
+    if (response.status === 401) {
+      // Token might be expired, try to refresh it
+      const newToken = await refreshToken();
+      
+      // Update the Authorization header with the new token
+      options.headers['Authorization'] = `Bearer ${newToken}`;
+      
+      // Retry the original request with the new token
+      response = await fetch(url, options);
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('API call failed:', error);
+    throw error;
   }
 }
 
 export async function fetchDashboardStats() {
-  // Simulate API call
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  // TODO: Remove this condition once real API is implemented
+  if (env === 'production') {
+    return apiCall(`${API_URL}/admin/dashboard-stats`);
+  } else {
+    // TODO: Remove this else block once real API is implemented
+    console.log('Using fake dashboard stats for non-production environment');
+    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API delay
   
-  // Check if user is authenticated (you might want to use a more robust check in a real app)
-  const token = localStorage.getItem('authToken');
-  if (!token) {
-    throw new Error('User is not authenticated');
+    // TODO: Remove this mock data once real API is implemented
+    return {
+      totalUsers: 150000,
+      activeListings: 75000,
+      adPurchases: 12000,
+      revenue: 1800000,
+      totalCategories: 500,
+      monthlyRevenue: [500000, 750000, 800000, 1250000, 1400000, 1750000, 2050000],
+      userGrowth: [60000, 80000, 94250, 101250, 115741, 135741, 168521],
+      listingGrowth: [60000, 62500, 65000, 67500, 70000, 72500, 75000],
+      adSalesGrowth: [9000, 9500, 10000, 10500, 11000, 11500, 12000]
+    };
   }
-
-  // Return mock data for a successful company
-  return {
-    totalUsers: 150000,
-    activeListings: 75000,
-    adPurchases: 12000,
-    revenue: 1800000,
-    totalCategories: 500,
-    monthlyRevenue: [500000, 750000, 800000, 1250000, 1400000, 1750000, 2050000],
-    userGrowth: [60000, 80000, 94250, 101250, 115741, 135741, 168521],
-    listingGrowth: [60000, 62500, 65000, 67500, 70000, 72500, 75000],
-    adSalesGrowth: [9000, 9500, 10000, 10500, 11000, 11500, 12000]
-  };
 }
 
-// Add a function to get the auth token from localStorage
-function getAuthToken() {
-  return localStorage.getItem('authToken');
-}
-
-export async function fetchDirectories() {
-  if (get(isProduction)) {
-    const directoryId = get(effectiveDirectoryId);
-    if (!directoryId) {
-      throw new Error("No directory configured for production");
-    }
-    return [{ id: directoryId, name: "Production Directory" }];
-  }
-
-  const response = await fetch(`${API_URL}/directories`);
-  if (!response.ok) {
-    throw new Error("Failed to fetch directories");
-  }
-  return response.json();
-}
-
+// Update existing API functions to use the new apiCall wrapper
 export async function fetchListings() {
   const directoryId = get(effectiveDirectoryId);
   if (!directoryId) {
     throw new Error("No directory selected");
   }
-  const response = await fetch(`${API_URL}/listings?directory_id=${directoryId}`, {
-    headers: getAuthHeaders(),
-  });
-  console.log("Response:", response);
-  if (!response.ok) {
-    throw new Error("Failed to fetch businesses");
-  }
-  return response.json();
+  return apiCall(`${API_URL}/listings?directory_id=${directoryId}`);
 }
 
 export async function searchListings(query) {
@@ -97,47 +104,19 @@ export async function searchListings(query) {
   if (!directoryId) {
     throw new Error("No directory selected");
   }
-  const response = await fetch(`${API_URL}/listings/search?q=${query}&directory_id=${directoryId}`, {
-    headers: getAuthHeaders(),
-  });
-  console.log("Response:", response);
-  if (!response.ok) {
-    throw new Error("Failed to search listings");
-  }
-  return response.json();
+  return apiCall(`${API_URL}/listings/search?q=${query}&directory_id=${directoryId}`);
 }
 
 export async function fetchAdPurchases() {
-  let url = `${API_URL}/admin/ad-purchases`;
-  console.log("Fetching ad purchases from:", url);
-  try {
-    const response = await fetch(url, {
-      headers: getAuthHeaders(),
-    });
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Error response:", errorText);
-      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-    }
-    return response.json();
-  } catch (error) {
-    console.error("Failed to fetch ad purchases:", error);
-    throw error;
-  }
+  return apiCall(`${API_URL}/admin/ad-purchases`);
 }
 
 export async function fetchListingById(id) {
-  const response = await fetch(`${API_URL}/admin/listings/${id}`, {
-    headers: getAuthHeaders(),
-  });
-  
-  if (!response.ok) {
-    const error = new Error(`HTTP error! status: ${response.status}`);
-    error.status = response.status;
-    throw error;
-  }
-  
-  return response.json();
+  return apiCall(`${API_URL}/admin/listings/${id}`);
+}
+
+export async function fetchUsers() {
+  return apiCall(`${API_URL}/admin/users`);
 }
 
 export async function loginUser(credentials) {

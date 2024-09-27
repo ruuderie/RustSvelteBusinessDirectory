@@ -25,7 +25,7 @@ pub async fn auth_middleware<B>(
         return Ok(next.run(req).await);
     }
 
-    let auth_header = req
+    let token = req
         .headers()
         .get(http::header::AUTHORIZATION)
         .and_then(|header| header.to_str().ok())
@@ -36,20 +36,25 @@ pub async fn auth_middleware<B>(
                 None
             }
         });
-
-    let token = auth_header.ok_or(StatusCode::UNAUTHORIZED)?;
+    tracing::info!("Received token: {:?}", token);
 
     let db = req.extensions().get::<DatabaseConnection>().unwrap().clone();
     let session = match session::Entity::find()
-        .filter(session::Column::BearerToken.eq(token.clone()))
+        .filter(session::Column::BearerToken.eq(token.clone().unwrap_or_default()))
         .one(&db)
         .await
     {
-        Ok(Some(session)) => session,
+        Ok(Some(session)) => {
+            if session.token_expiration < Utc::now() {
+                tracing::warn!("Token has expired. Please refresh the token.");
+                return Err(StatusCode::UNAUTHORIZED);
+            }
+            session
+        },
         Ok(None) => {
-            tracing::error!("No session found for token");
+            tracing::error!("No session found for token: {:?}", token);
             return Err(StatusCode::UNAUTHORIZED);
-        }
+        },
         Err(e) => {
             tracing::error!("Database error when fetching session: {:?}", e);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
@@ -189,7 +194,7 @@ pub async fn admin_check_middleware<B>(
                 None
             }
         });
-    tracing::debug!("Token: {:?}", token);
+    tracing::debug!("Extracted token: {:?}", token);
 
     let db = req.extensions().get::<DatabaseConnection>().unwrap().clone();
     let session = match session::Entity::find()
@@ -197,14 +202,24 @@ pub async fn admin_check_middleware<B>(
         .one(&db)
         .await
     {
-        Ok(session) => session,
+        Ok(Some(session)) => {
+            tracing::debug!("Session found: {:?}", session.id);
+            Some(session)
+        },
+        Ok(None) => {
+            tracing::error!("No session found for token");
+            // Debug: Print all sessions in the database
+            let all_sessions = session::Entity::find().all(&db).await.unwrap_or_default();
+            tracing::debug!("All sessions in database: {:?}", all_sessions);
+            None
+        },
         Err(e) => {
             tracing::error!("Database error when fetching session: {:?}", e);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
 
-    let user = match check_user_auth(&db, session).await {
+    let user = match check_user_auth(&db, session.clone()).await {
         Ok(Some(user)) => user,
         Ok(None) => {
             tracing::error!("User not found for session");
@@ -220,7 +235,7 @@ pub async fn admin_check_middleware<B>(
         tracing::error!("User {:?} is not an admin", user.id);
         Err(StatusCode::FORBIDDEN)
     } else {
-        tracing::debug!("User {:?} is an admin", user.id);
+        tracing::info!("User {:?} is authorized", user.id);
         Ok(next.run(req).await)
     }
 }

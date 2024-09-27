@@ -18,7 +18,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use crate::auth::{hash_password, verify_password, generate_jwt, generate_jwt_admin};
 use crate::models::user::{UserLogin, UserRegistration};
-use crate::handlers::sessions::create_session;
+use crate::handlers::sessions::{create_session, refresh_token};
 use crate::handlers::profiles::get_profile_by_id;
 use sea_orm::{DatabaseConnection, EntityTrait, Set, ColumnTrait, QueryFilter, ActiveModelTrait};
 use uuid::Uuid;
@@ -40,6 +40,7 @@ pub fn auth_routes() -> Router {
         .route("/login", post(login_user))
         .route("/register", post(register_user))
         .route("/logout", post(logout_user))
+        .route("/refresh-token", post(refresh_token))
 }
 
 pub fn authenticated_routes() -> Router {

@@ -46,6 +46,8 @@ pub async fn create_session(
         tracing::error!("Error generating JWT: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
+    tracing::info!("Generated token for user {}: {}", user.id, token); // Add this line
+    tracing::debug!("Generated token: {}", token);
     let refresh_token = Uuid::new_v4().to_string();
 
     let new_session = session::Model {
@@ -129,4 +131,27 @@ pub async fn cleanup_expired_sessions(db: &DatabaseConnection) {
         Ok(del) => tracing::info!("Cleaned up {} expired sessions", del.rows_affected),
         Err(e) => tracing::error!("Error cleaning up expired sessions: {:?}", e),
     }
+}
+
+pub async fn refresh_token(
+    Extension(db): Extension<DatabaseConnection>,
+    Extension(current_session): Extension<session::Model>,
+) -> Result<Json<SessionResponse>, StatusCode> {
+    let user = user::Entity::find_by_id(current_session.user_id)
+        .one(&db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    let new_token = generate_jwt(&user).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let new_expiration = Utc::now() + chrono::Duration::hours(1);
+
+    let mut session: session::ActiveModel = current_session.into();
+    session.bearer_token = Set(new_token.clone());
+    session.token_expiration = Set(new_expiration);
+    session.last_accessed_at = Set(Utc::now());
+
+    session.update(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(SessionResponse { token: new_token }))
 }

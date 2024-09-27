@@ -45,19 +45,17 @@ fn configure_cors(directory_client: &str, admin_client: &str) -> CorsLayer {
         ])
         .allow_credentials(true)
 }
-
 #[tokio::main]
 async fn main() {
+    dotenv::dotenv().ok();
+    let rust_log = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
     // Set up tracing
     tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
-        ))
+        .with(tracing_subscriber::EnvFilter::new(rust_log))
         .with(tracing_subscriber::fmt::layer())
         .init();
 
     // Rest of your main function
-    dotenv::dotenv().ok();
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let admin_email = std::env::var("ADMIN_USER").expect("ADMIN_USER must be set");
     let admin_password = std::env::var("ADMIN_PASSWORD").expect("ADMIN_PASSWORD must be set");
