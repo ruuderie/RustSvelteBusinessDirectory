@@ -17,17 +17,8 @@ use tracing::debug;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String,           // User ID
-    pub profile_id: String,    // Profile ID
-    pub directory_id: String,  // Directory ID
     pub is_admin: bool,        // Admin flag
-    pub exp: usize,            // Expiration time
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ClaimsAdmin {
-    pub sub: String,           // User ID
-    pub is_admin: bool,        // Admin flag
-    pub exp: usize,            // Expiration time
+    pub exp: usize,  
 }
 
 pub fn hash_password(password: &str) -> Result<String, bcrypt::BcryptError> {
@@ -39,33 +30,31 @@ pub fn verify_password(password: &str, hash: &str) -> Result<bool, bcrypt::Bcryp
     verify(password, hash)
 }
 
-pub fn generate_jwt(user: &user::Model, profile: &profile::Model) -> Result<String, jsonwebtoken::errors::Error> {
+pub fn generate_jwt(user: &user::Model) -> Result<String, jsonwebtoken::errors::Error> {
     let expiration = Utc::now()
         .checked_add_signed(Duration::hours(24))
         .expect("valid timestamp")
         .timestamp();
 
-        // Generate JWT including user_id, profile_id, and directory_id
-        let claims = Claims {
-            sub: user.id.to_string(),
-            profile_id: profile.id.to_string(),
-            directory_id: profile.directory_id.to_string(),
-            exp: expiration as usize,
-            is_admin: user.is_admin,
-        };
+    let claims = Claims {
+        sub: user.id.to_string(),
+        is_admin: user.is_admin,
+        exp: expiration as usize,
+    };
 
     let header = Header::default();
     let encoding_key = EncodingKey::from_secret("your-secret-key".as_ref());
 
     encode(&header, &claims, &encoding_key)
 }
+
 pub fn generate_jwt_admin(user: &user::Model) -> Result<String, jsonwebtoken::errors::Error> {
     let expiration = Utc::now()
         .checked_add_signed(Duration::hours(24))
         .expect("valid timestamp")
         .timestamp();
 
-    let claims = ClaimsAdmin {
+    let claims = Claims {
         sub: user.id.to_string(),
         exp: expiration as usize,
         is_admin: user.is_admin,

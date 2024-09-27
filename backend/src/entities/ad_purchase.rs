@@ -10,11 +10,15 @@ pub struct Model {
     pub id: Uuid,
     pub listing_id: Uuid,
     pub profile_id: Uuid,
+    #[sea_orm(column_type = "TimestampWithTimeZone")]
     pub start_date: DateTime<Utc>,
+    #[sea_orm(column_type = "TimestampWithTimeZone")]
     pub end_date: DateTime<Utc>,
     pub price: f32,
     pub status: String,
+    #[sea_orm(column_type = "TimestampWithTimeZone")]
     pub created_at: DateTime<Utc>,
+    #[sea_orm(column_type = "TimestampWithTimeZone")]
     pub updated_at: DateTime<Utc>,
 }
 

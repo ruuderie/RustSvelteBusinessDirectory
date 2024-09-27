@@ -30,7 +30,7 @@ pub fn create_router(db: DatabaseConnection) -> Router {
         .merge(public_routes)  // This will be accessible without authentication
         .nest("/api", 
             authenticated_routes
-                .layer(axum::middleware::from_fn(auth_middleware))
+                .layer(axum::middleware::from_fn_with_state(db.clone(), auth_middleware))
                 .layer(axum::middleware::from_fn(admin_check_middleware))
         )  // This will require authentication, and admin check for admin routes
         .layer(Extension(db))

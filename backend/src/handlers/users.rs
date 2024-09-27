@@ -3,16 +3,22 @@ use crate::entities::{
     profile::{self, Entity as Profile},
     user::{self, Entity as User},
     user_account::{self, Entity as UserAccount},
+    session::{self, Entity as Session},
+    account::{self, Entity as Account},
 };
 use axum::{
     extract::{Extension, Json, Path},
+    response::IntoResponse,
     http::StatusCode,
+    http::header::*,
+    http::Error,
     routing::{post, get},
     Router,
 };
 use serde::{Deserialize, Serialize};
 use crate::auth::{hash_password, verify_password, generate_jwt, generate_jwt_admin};
 use crate::models::user::{UserLogin, UserRegistration};
+use crate::handlers::sessions::create_session;
 use crate::handlers::profiles::get_profile_by_id;
 use sea_orm::{DatabaseConnection, EntityTrait, Set, ColumnTrait, QueryFilter, ActiveModelTrait};
 use uuid::Uuid;
@@ -26,13 +32,14 @@ pub struct LoginCredentials {
 
 #[derive(Serialize)]
 pub struct LoginResponse {
-    token: String,
+    pub token: String,
 }
 
 pub fn auth_routes() -> Router {
     Router::new()
         .route("/login", post(login_user))
         .route("/register", post(register_user))
+        .route("/logout", post(logout_user))
 }
 
 pub fn authenticated_routes() -> Router {
@@ -162,11 +169,11 @@ pub async fn register_user(
 pub async fn login_user(
     Extension(db): Extension<DatabaseConnection>,
     Json(credentials): Json<LoginCredentials>,
-) -> Result<Json<LoginResponse>, StatusCode> {
-    tracing::info!("Login attempt for email: {}", credentials.email);
-    
-    let user = match user::Entity::find()
-        .filter(user::Column::Email.eq(credentials.email.clone()))
+) -> Result<impl IntoResponse, StatusCode> {
+    tracing::info!("Attempting to log in user: {}", credentials.email);
+
+    let user = match User::find()
+        .filter(user::Column::Email.eq(&credentials.email))
         .one(&db)
         .await
     {
@@ -180,7 +187,6 @@ pub async fn login_user(
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
-    tracing::info!("User found with id: {}", user.id);
 
     match verify_password(&credentials.password, &user.password_hash) {
         Ok(true) => tracing::info!("Password verified successfully"),
@@ -194,41 +200,38 @@ pub async fn login_user(
         }
     }
 
-    //if the user is not an admin, proceed as normal
-    if !user.is_admin {
-        tracing::info!("User is not an admin, proceeding as normal");
-        //get the user's account id
-        let user_account = user_account::Entity::find()
-            .filter(user_account::Column::UserId.eq(user.id))
-            .one(&db)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-
-            
-        // Fetch the user's profile
-        let profile = profile::Entity::find()
-            .filter(profile::Column::AccountId.eq(user_account.account_id))
-            .one(&db)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-
-        let token = generate_jwt(&user, &profile)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-        Ok(Json(LoginResponse { token }))
-    } else {
-        //NOTE: admins don't need a profile, so we can skip the profile part but in the future 
-        // we will need to add a profile to the NON-ROOT admin users
-        // users who administer one or more directories and not the entire application
-        
-        tracing::info!("User is an admin, generating admin token");
-
-        //if the user is an admin, generate a different token
-        let token = generate_jwt_admin(&user)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-        Ok(Json(LoginResponse { token }))
+    // Use the create_session function from sessions.rs
+    match create_session(Extension(db.clone()), Json(UserLogin {
+        email: credentials.email.clone(),
+        password: credentials.password.clone(),
+    })).await {
+        Ok(session_response) => {
+            tracing::info!("Session created successfully for user: {}", user.id);
+            Ok(Json(session_response))
+        },
+        Err(e) => {
+            tracing::error!("Error creating session: {:?}", e);
+            Err(e)
+        }
     }
+}
+
+pub async fn logout_user(
+    Extension(db): Extension<DatabaseConnection>,
+    Extension(session): Extension<crate::entities::session::Model>,
+) -> Result<impl IntoResponse, StatusCode> {
+    if !session.verify_integrity() {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    session::Entity::update(session::ActiveModel {
+        id: Set(session.id),
+        is_active: Set(false),
+        ..Default::default()
+    })
+    .exec(&db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(StatusCode::OK)
 }

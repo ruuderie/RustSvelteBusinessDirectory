@@ -13,12 +13,14 @@ use crate::entities::listing::Relation::ListingAttribute;
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
-    pub listing_id: Option<Uuid>, // Change this to Option<Uuid>
+    pub listing_id: Option<Uuid>,
     pub template_id: Option<Uuid>,
     pub attribute_type: AttributeType,
     pub attribute_key: AttributeKey,
     pub value: Value,
+    #[sea_orm(column_type = "TimestampWithTimeZone")]
     pub created_at: DateTime<Utc>,
+    #[sea_orm(column_type = "TimestampWithTimeZone")]
     pub updated_at: DateTime<Utc>,
 }
 

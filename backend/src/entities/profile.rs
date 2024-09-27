@@ -20,7 +20,9 @@ pub struct Model {
     pub business_website: Option<String>,
     pub additional_info: Option<Value>,
     pub is_active: bool,
+    #[sea_orm(column_type = "TimestampWithTimeZone")]
     pub created_at: DateTime<Utc>,
+    #[sea_orm(column_type = "TimestampWithTimeZone")]
     pub updated_at: DateTime<Utc>,
 }
 

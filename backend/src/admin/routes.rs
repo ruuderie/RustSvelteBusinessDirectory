@@ -10,6 +10,8 @@ use crate::handlers::{admin, categories, profiles, templates};
 use crate::auth::*;
 use crate::middleware::*;
 use axum::middleware::from_fn;
+use crate::middleware::admin::admin_middleware;
+
 use uuid::Uuid;
 
 pub fn admin_routes(db: DatabaseConnection) -> Router {
@@ -71,9 +73,10 @@ pub fn admin_routes(db: DatabaseConnection) -> Router {
                 .route("/admin/statistics/ad-purchases", get(admin::get_ad_purchase_statistics))
                 .route("/admin/reports/activity", get(admin::get_activity_report))
                 .route("/admin/reports/revenue", get(admin::get_revenue_report))
+                .layer(axum::middleware::from_fn(admin_middleware))
                 .with_state(db)
 
         })
-        
+
 }
 

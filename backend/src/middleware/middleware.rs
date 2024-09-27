@@ -4,17 +4,13 @@ use axum::{
     http::{StatusCode, Request},
     Extension,
 };
-use crate::auth::{validate_jwt, Claims, ClaimsAdmin};
-use crate::entities::{user, user_account, profile, account};
-use sea_orm::{EntityTrait, DatabaseConnection, QueryFilter, ColumnTrait};
+use crate::auth::{validate_jwt, Claims};
+use crate::entities::{user, user_account, profile, account, session};
+use sea_orm::{EntityTrait, DatabaseConnection, QueryFilter, ColumnTrait, Set, ActiveModelTrait};
 use uuid::Uuid;
 use crate::models::user::User;
-
-#[derive(Debug)]
-enum ValidClaims {
-    User(Claims),
-    Admin(ClaimsAdmin),
-}
+use chrono::Utc;
+use axum::http;
 
 pub async fn auth_middleware<B>(
     mut req: Request<B>,
@@ -24,72 +20,119 @@ pub async fn auth_middleware<B>(
 
     let path = req.uri().path();
 
-    // Special handling for login and register routes
-    if path == "/login" || path == "/register" {
-        tracing::debug!("Login/Register route detected, proceeding without token validation");
-        return Ok(next.run(req).await);
-    }
-
-    // Check if the route is public
-    if is_public_route(path) {
+    if path == "/login" || path == "/register" || is_public_route(path) {
         tracing::debug!("Public route detected, skipping authentication");
         return Ok(next.run(req).await);
-    } else {
-        tracing::debug!("Private route detected, checking authentication");
     }
 
-    // Extract the Authorization header
-    let auth_header = req.headers().get(axum::http::header::AUTHORIZATION)
-        .ok_or_else(|| {
-            tracing::error!("No Authorization header found");
-            StatusCode::UNAUTHORIZED
-        })?;
+    let auth_header = req
+        .headers()
+        .get(http::header::AUTHORIZATION)
+        .and_then(|header| header.to_str().ok())
+        .and_then(|auth_value| {
+            if auth_value.starts_with("Bearer ") {
+                Some(auth_value[7..].to_owned())
+            } else {
+                None
+            }
+        });
 
-    // Parse the token
-    let token = auth_header.to_str()
-        .map_err(|e| {
-            tracing::error!("Failed to parse Authorization header: {:?}", e);
-            StatusCode::UNAUTHORIZED
-        })?
-        .trim_start_matches("Bearer ")
-        .to_string();
-    tracing::debug!("Token: {}", token);
-
-    // Validate the token and extract claims
-    let claims = validate_jwt::<Claims>(&token)
-        .map(ValidClaims::User)
-        .or_else(|_| validate_jwt::<ClaimsAdmin>(&token).map(ValidClaims::Admin))
-        .map_err(|e| {
-            tracing::error!("Failed to validate JWT: {:?}", e);
-            StatusCode::UNAUTHORIZED
-        })?;
-
-    let user_id = match &claims {
-        ValidClaims::User(user_claims) => &user_claims.sub,
-        ValidClaims::Admin(admin_claims) => &admin_claims.sub,
-    };
-
-    tracing::debug!("JWT validated successfully for user: {}", user_id);
-
-    // Fetch the user from the database
-    let user_id = Uuid::parse_str(user_id).map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let token = auth_header.ok_or(StatusCode::UNAUTHORIZED)?;
 
     let db = req.extensions().get::<DatabaseConnection>().unwrap().clone();
-    let user = user::Entity::find()
-        .filter(user::Column::Id.eq(user_id))
+    let session = match session::Entity::find()
+        .filter(session::Column::BearerToken.eq(token.clone()))
+        .one(&db)
+        .await
+    {
+        Ok(Some(session)) => session,
+        Ok(None) => {
+            tracing::error!("No session found for token");
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+        Err(e) => {
+            tracing::error!("Database error when fetching session: {:?}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    tracing::debug!("Session found: {:?}", session.id);
+    tracing::debug!("Session is active: {:?}", session.is_active);
+    tracing::debug!("Session integrity: {:?}", session.verify_integrity());
+    tracing::debug!("Session token expiration: {:?}", session.token_expiration);
+    tracing::debug!("Session refresh token expiration: {:?}", session.refresh_token_expiration);
+
+
+    if !session.is_active || !session.verify_integrity() {
+        
+        tracing::error!("Session is inactive or failed integrity check");
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    if session.token_expiration < Utc::now() {
+        if session.refresh_token_expiration > Utc::now() {
+            // Soft expiration: Refresh the session
+            let user = user::Entity::find_by_id(session.user_id)
+                .one(&db)
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+                .ok_or(StatusCode::UNAUTHORIZED)?;
+
+            let new_token = crate::auth::generate_jwt(&user)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            let new_expiration = Utc::now() + chrono::Duration::hours(1);
+            
+            let updated_session = session::ActiveModel {
+                id: Set(session.id),
+                bearer_token: Set(new_token.clone()),
+                token_expiration: Set(new_expiration),
+                last_accessed_at: Set(Utc::now()),
+                ..Default::default()
+            };
+            
+            let updated_session: session::Model = updated_session.update(&db).await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            
+            let integrity_hash = updated_session.generate_integrity_hash();
+            session::Entity::update(session::ActiveModel {
+                id: Set(updated_session.id),
+                integrity_hash: Set(integrity_hash),
+                ..Default::default()
+            })
+            .exec(&db)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+            // Update the Authorization header with the new token
+            req.headers_mut().insert(
+                http::header::AUTHORIZATION,
+                http::HeaderValue::from_str(&format!("Bearer {}", new_token)).unwrap(),
+            );
+        } else {
+            // Hard expiration: Force re-authentication
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    } else {
+        // Update last_accessed_at
+        session::Entity::update(session::ActiveModel {
+            id: Set(session.id),
+            last_accessed_at: Set(Utc::now()),
+            ..Default::default()
+        })
+        .exec(&db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    let user = user::Entity::find_by_id(session.user_id)
         .one(&db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::UNAUTHORIZED)?;
-    tracing::debug!("User {:?} found", user.id);
-    // Insert the user into the request extensions
-    req.extensions_mut().insert(user.clone());
 
-    // Check if the user is an admin
-    if !is_admin(&user, &db).await {
-        tracing::error!("User is not an admin");
-        return Err(StatusCode::FORBIDDEN);
-    }
+    tracing::debug!("User {:?} found", user.id);
+
+    req.extensions_mut().insert(user.clone());
+    req.extensions_mut().insert(session.clone());
 
     // Fetch the user's profiles and their associated directories
     let user_accounts = user_account::Entity::find()
@@ -105,10 +148,9 @@ pub async fn auth_middleware<B>(
         .filter_map(|account| Some(account.directory_id))
         .collect();
 
-    // Attach user and directory_ids to request extensions
+    // Attach directory_ids to request extensions
     req.extensions_mut().insert(directory_ids);
 
-    // Proceed to the next handler
     Ok(next.run(req).await)
 }
 
@@ -130,19 +172,69 @@ fn is_public_route(path: &str) -> bool {
 }
 
 pub async fn admin_check_middleware<B>(
-    Extension(user): Extension<user::Model>,
-    request: Request<B>,
+    req: Request<B>,
     next: Next<B>,
 ) -> Result<Response, StatusCode> {
-    println!("Admin check middleware called for path: {}", request.uri().path());
-    tracing::debug!("Admin check middleware called for path: {}", request.uri().path());
-    tracing::debug!("User {:?} trying to access admin route", user.id);
-    
-    if request.uri().path().starts_with("/api/admin") && !user.is_admin {
-        tracing::error!("User is not an admin");
+    tracing::debug!("Admin check middleware called for path: {}", req.uri().path());
+    tracing::debug!("Request headers: {:?}", req.headers());
+    tracing::debug!("Request extensions: {:?}", req.extensions());
+    let token = req
+        .headers()
+        .get(http::header::AUTHORIZATION)
+        .and_then(|header| header.to_str().ok())
+        .and_then(|auth_value| {
+            if auth_value.starts_with("Bearer ") {
+                Some(auth_value[7..].to_owned())
+            } else {
+                None
+            }
+        });
+    tracing::debug!("Token: {:?}", token);
+
+    let db = req.extensions().get::<DatabaseConnection>().unwrap().clone();
+    let session = match session::Entity::find()
+        .filter(session::Column::BearerToken.eq(token.clone().unwrap_or_default()))
+        .one(&db)
+        .await
+    {
+        Ok(session) => session,
+        Err(e) => {
+            tracing::error!("Database error when fetching session: {:?}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    let user = match check_user_auth(&db, session).await {
+        Ok(Some(user)) => user,
+        Ok(None) => {
+            tracing::error!("User not found for session");
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+        Err(e) => {
+            tracing::error!("Error checking user auth: {:?}", e);
+            return Err(e);
+        }
+    };
+
+    if req.uri().path().starts_with("/api/admin") && !user.is_admin {
+        tracing::error!("User {:?} is not an admin", user.id);
         Err(StatusCode::FORBIDDEN)
     } else {
-        tracing::debug!("User is an admin");
-        Ok(next.run(request).await)
+        tracing::debug!("User {:?} is an admin", user.id);
+        Ok(next.run(req).await)
     }
+}
+
+async fn check_user_auth(db: &DatabaseConnection, session: Option<session::Model>) -> Result<Option<user::Model>, StatusCode> {
+    let user = match session {
+        Some(session) => {
+            user::Entity::find_by_id(session.user_id)
+                .one(db)
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        },
+        None => None,
+    };
+
+    Ok(user)
 }

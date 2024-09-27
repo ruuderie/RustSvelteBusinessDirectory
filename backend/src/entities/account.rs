@@ -11,7 +11,9 @@ pub struct Model {
     pub directory_id: Uuid,  // New field to associate with Directory
     pub name: String,
     pub is_active: bool,
+    #[sea_orm(column_type = "TimestampWithTimeZone")]
     pub created_at: DateTime<Utc>,
+    #[sea_orm(column_type = "TimestampWithTimeZone")]
     pub updated_at: DateTime<Utc>,
 }
 

@@ -1,4 +1,4 @@
-use crate::entities::{user, directory, listing, ad_purchase, profile, account, template, category, directory_type, listing_attribute};
+use crate::entities::{user, directory, listing, ad_purchase, profile, account, session,template, category, directory_type, listing_attribute};
 use axum::{
     extract::{Extension, Json, Path, State, Query},
     http::StatusCode,
@@ -11,7 +11,7 @@ use crate::models::listing::ListingStatus;
 use crate::models::ad_purchase::AdStatus;
 use crate::models::directory_type::{DirectoryTypeModel, CreateDirectoryType, UpdateDirectoryType};
 use std::collections::HashMap;
-use crate::handlers::{listings,directories,directory_types};
+use crate::handlers::{listings,directories,directory_types,sessions};
 
 #[derive(Deserialize)]
 pub struct UpdateUserInput {
@@ -65,11 +65,10 @@ pub struct ActivityReport {
 pub async fn get_directories(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
 ) -> Result<impl IntoResponse, StatusCode> {
     tracing::info!("Getting directories via admin route");
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
+
     let extension_db = Extension(db);
     let directories = directories::get_directories(extension_db).await?;
     Ok(directories)
@@ -79,12 +78,11 @@ pub async fn get_directories(
 pub async fn create_directory_type(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
     Json(input): Json<CreateDirectoryType>,
 ) -> Result<impl IntoResponse, StatusCode> {
     tracing::info!("Creating directory type via admin route");
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
+
     let state_db = State(db);
     let input = Json(input);
     let directory_type = directory_types::create_directory_type(state_db, input).await?;
@@ -95,13 +93,11 @@ pub async fn create_directory_type(
 pub async fn update_directory_type(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
     Path(directory_type_id): Path<Uuid>,
     Json(input): Json<UpdateDirectoryType>,
 ) -> Result<impl IntoResponse, StatusCode> {
     tracing::info!("Updating directory type via admin route");
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
     let state_db = State(db);
     let path = Path(directory_type_id);
     let input = Json(input);
@@ -113,12 +109,10 @@ pub async fn update_directory_type(
 pub async fn delete_directory_type(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
     Path(directory_type_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
     tracing::info!("Deleting directory type via admin route");
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
     let path = Path(directory_type_id);
     let state_db = State(db);
 
@@ -130,10 +124,9 @@ pub async fn delete_directory_type(
 pub async fn get_directory_types(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
+
     let state_db = State(db);
     let directory_types = directory_types::get_directory_types(state_db).await?;
     Ok(directory_types)
@@ -142,11 +135,9 @@ pub async fn get_directory_types(
 pub async fn get_directory_listings(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
     Path(directory_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
     // extension database connection and query params
     let extension_db = Extension(db);
     let query_params = Query(HashMap::new());
@@ -158,12 +149,9 @@ pub async fn get_directory_listings(
 pub async fn get_listing(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
     Path((listing_id)): Path<(Uuid)>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
-    //
     let extension_db = Extension(db);
     let path = Path((listing_id));
 
@@ -174,10 +162,8 @@ pub async fn get_listing(
 pub async fn list_users(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
 
     let users = user::Entity::find()
         .all(&db)
@@ -190,11 +176,9 @@ pub async fn list_users(
 pub async fn get_user(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
     Path(user_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
 
     let user = user::Entity::find_by_id(user_id)
         .one(&db)
@@ -210,13 +194,10 @@ pub async fn get_user(
 pub async fn update_user(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
     Path(user_id): Path<Uuid>,
     Json(input): Json<UpdateUserInput>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
-
     let mut user: user::ActiveModel = user::Entity::find_by_id(user_id)
         .one(&db)
         .await
@@ -239,11 +220,9 @@ pub async fn update_user(
 pub async fn delete_user(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
     Path(user_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
 
     user::Entity::delete_by_id(user_id)
         .exec(&db)
@@ -256,11 +235,9 @@ pub async fn delete_user(
 pub async fn toggle_admin(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
     Path(user_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
 
     let mut user: user::ActiveModel = user::Entity::find_by_id(user_id)
         .one(&db)
@@ -280,10 +257,8 @@ pub async fn toggle_admin(
 pub async fn get_all_directory_stats(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
 
     let directories = directory::Entity::find().all(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -323,11 +298,9 @@ pub async fn get_all_directory_stats(
 pub async fn get_directory_stats(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
     Path(directory_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
 
     let directory = directory::Entity::find_by_id(directory_id)
         .one(&db)
@@ -370,10 +343,8 @@ pub async fn get_directory_stats(
 pub async fn list_pending_listings(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
 
     let pending_listings = listing::Entity::find()
         .filter(listing::Column::Status.eq(ListingStatus::Pending))
@@ -387,11 +358,9 @@ pub async fn list_pending_listings(
 pub async fn approve_listing(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
     Path(listing_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
 
     let mut listing: listing::ActiveModel = listing::Entity::find_by_id(listing_id)
         .one(&db)
@@ -410,12 +379,9 @@ pub async fn approve_listing(
 pub async fn reject_listing(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
     Path(listing_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
-
     let mut listing: listing::ActiveModel = listing::Entity::find_by_id(listing_id)
         .one(&db)
         .await
@@ -433,10 +399,8 @@ pub async fn reject_listing(
 pub async fn get_ad_purchase_stats(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
 
     let total_purchases = ad_purchase::Entity::find().count(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -466,10 +430,8 @@ pub async fn get_ad_purchase_stats(
 pub async fn list_active_ad_purchases(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
 
     let active_purchases = ad_purchase::Entity::find()
         .filter(ad_purchase::Column::Status.eq(AdStatus::Active))
@@ -483,11 +445,9 @@ pub async fn list_active_ad_purchases(
 pub async fn get_ad_purchase(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
     Path(purchase_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
 
     let purchase = ad_purchase::Entity::find_by_id(purchase_id)
         .one(&db)
@@ -501,22 +461,27 @@ pub async fn get_ad_purchase(
 pub async fn list_ad_purchases(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
+    tracing::info!("Attempting to list ad purchases for user: {:?}", current_user.id);
 
-    let purchases = ad_purchase::Entity::find().all(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?; 
-    Ok(Json(purchases))
+    match ad_purchase::Entity::find().all(&db).await {
+        Ok(purchases) => {
+            tracing::info!("Successfully fetched {} ad purchases", purchases.len());
+            Ok(Json(purchases))
+        },
+        Err(e) => {
+            tracing::error!("Failed to fetch ad purchases: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 pub async fn cancel_ad_purchase(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
     Path(purchase_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
 
     let mut purchase: ad_purchase::ActiveModel = ad_purchase::Entity::find_by_id(purchase_id)
         .one(&db)
@@ -535,10 +500,8 @@ pub async fn cancel_ad_purchase(
 pub async fn get_user_statistics(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
 
     let total_users = user::Entity::find().count(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let active_users = user::Entity::find()
@@ -565,10 +528,8 @@ pub async fn get_user_statistics(
 pub async fn get_account_statistics(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
 
     let total_accounts = account::Entity::find().count(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let active_accounts = account::Entity::find()
@@ -588,10 +549,8 @@ pub async fn get_account_statistics(
 pub async fn get_listing_statistics(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
 
     let total_listings = listing::Entity::find().count(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let active_listings = listing::Entity::find()
@@ -611,10 +570,8 @@ pub async fn get_listing_statistics(
 pub async fn get_ad_purchase_statistics(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
 
     let total_purchases = ad_purchase::Entity::find().count(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let active_purchases = ad_purchase::Entity::find()
@@ -643,10 +600,8 @@ pub async fn get_ad_purchase_statistics(
 pub async fn get_activity_report(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
     let report;
     // Fetch recent activity data
     let recent_activities = {
@@ -701,10 +656,8 @@ pub async fn get_activity_report(
 pub async fn get_revenue_report(
     State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
+    Extension(current_session): Extension<session::Model>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if !current_user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
 
     // Fetch revenue data total ad purchases by month
     let revenue_data = {
@@ -721,4 +674,4 @@ pub async fn get_revenue_report(
     };
 
     Ok(Json(revenue_data))
-}   
+}

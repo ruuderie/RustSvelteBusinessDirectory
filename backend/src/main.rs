@@ -7,19 +7,44 @@ mod middleware;
 mod handlers;
 mod admin;
 mod models;
-
-use axum::{http, Router, 
-    middleware::{from_fn_with_state, from_fn}
+use axum::http::{self,HeaderName, HeaderValue, Method, StatusCode};
+use axum::middleware::{from_fn_with_state, from_fn};
+use axum::{
+    Router,
+    error_handling::HandleErrorLayer,
 };
+use tower::{ServiceBuilder, BoxError};
 use sea_orm::Database;
 use sea_orm_migration::MigratorTrait;
 use std::net::SocketAddr;
+use std::convert::Infallible;
 use tower_http::cors::{AllowOrigin, CorsLayer};
-use axum::http::{HeaderName, HeaderValue, Method};
-use crate::middleware::{auth_middleware};
+use tower_http::trace::TraceLayer;
 use crate::api::create_router;
 use crate::admin::setup::create_admin_user_if_not_exists;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+async fn handle_error(error: Box<dyn std::error::Error + Send + Sync>) -> (http::StatusCode, String) {
+    tracing::error!("Unhandled error: {:?}", error);
+    (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error".to_string())
+}
+
+// Add this new function
+fn configure_cors(directory_client: &str, admin_client: &str) -> CorsLayer {
+    let allow_origin = AllowOrigin::list(vec![
+        directory_client.parse::<HeaderValue>().unwrap(),
+        admin_client.parse::<HeaderValue>().unwrap(),
+    ]);
+
+    CorsLayer::new()
+        .allow_origin(allow_origin)
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
+        .allow_headers(vec![
+            HeaderName::from_static("content-type"),
+            HeaderName::from_static("authorization"),
+        ])
+        .allow_credentials(true)
+}
 
 #[tokio::main]
 async fn main() {
@@ -66,29 +91,21 @@ async fn main() {
 
     tracing::info!("Successfully connected to the database and ran migrations");
 
-    let directory_client =
-        std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5001".to_string());
-    //add 5150 localhost to allow origin as well
-    let admin_client = "http://localhost:5150".parse::<HeaderValue>().unwrap();
-    let allow_origin = AllowOrigin::list(vec![
-        directory_client.parse::<HeaderValue>().unwrap(),
-        admin_client.clone(),
-    ]);
+    let directory_client = std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5001".to_string());
+    let admin_client = "http://localhost:5150";
     tracing::info!("Directory URL: {}", directory_client);
-    tracing::info!("Admin URL: {:?}", admin_client);
+    tracing::info!("Admin URL: {}", admin_client);
 
-    let cors = CorsLayer::new()
-        .allow_origin(allow_origin)
-        .allow_methods([http::Method::GET, http::Method::POST, http::Method::PUT, http::Method::DELETE])
-        .allow_headers(vec![
-            HeaderName::from_static("content-type"),
-            HeaderName::from_static("authorization"),
-        ])
-        .allow_credentials(true);
+    let cors = configure_cors(&directory_client, admin_client);
 
     let app = Router::new()
-        .merge(create_router(db.clone()))
-        .layer(cors);
+    .merge(create_router(db.clone()))
+    .layer(cors)
+    .layer(
+        ServiceBuilder::new()
+            .layer(TraceLayer::new_for_http())
+            .into_inner()
+    );
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
     tracing::info!("Listening on {}", addr);

@@ -23,4 +23,5 @@ strum_macros = "0.26.4"
 futures = "0.3.30"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+sha2 = "0.10.8"
 

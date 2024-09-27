@@ -28,5 +28,4 @@ pub struct UserRegistration {
 pub struct UserLogin {
     pub email: String,
     pub password: String,
-    pub directory_id: Uuid,
 }

@@ -10,7 +10,9 @@ pub struct Model {
     pub id: Uuid,
     pub name: String,
     pub description: String,
+    #[sea_orm(column_type = "TimestampWithTimeZone")]
     pub created_at: DateTime<Utc>,
+    #[sea_orm(column_type = "TimestampWithTimeZone")]
     pub updated_at: DateTime<Utc>,
 }
 

@@ -12,7 +12,9 @@ pub struct Model {
     pub account_id: Uuid,
     pub role: UserRole,
     pub is_active: bool,
+    #[sea_orm(column_type = "TimestampWithTimeZone")]
     pub created_at: DateTime<Utc>,
+    #[sea_orm(column_type = "TimestampWithTimeZone")]
     pub updated_at: DateTime<Utc>,
 }
 

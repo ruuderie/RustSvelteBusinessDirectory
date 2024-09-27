@@ -3,7 +3,7 @@
     // import data from api.js 
     import { fetchAdPurchases } from '$lib/api';
     import { readable } from "svelte/store";
-  //  import DataTableActions from "./data-table-actions.svelte";
+    import DataTableActions from "./data-table-actions.svelte";
   //  import DataTableCheckbox from "./data-table/data-table-checkbox.svelte";
     import * as Table from "$lib/components/ui/table/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
@@ -30,17 +30,30 @@
 
 
   const fetchData = async () => {
-    const data = await fetchAdPurchases();
-    return data;
+    try {
+      const data = await fetchAdPurchases();
+      console.log("Fetched ad purchases:", data);
+      return data;
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      if (error instanceof Error) {
+        console.error("Error message:", error.message);
+        console.error("Error stack:", error.stack);
+      }
+      return [];
+    }
   };
 
-  const data = fetchData();
-  const table = createTable(readable(data));
+  let dataPromise = fetchData();
+  const table = createTable(readable(dataPromise));
 
   const columns = table.createColumns([
     table.column({
-      header: "ID",
-      accessor: "id"
+      header: "Actions",
+      accessor: "id",
+      cell: (row) => {
+        return `<DataTableActions id="${row.value}" />`;
+      }
     }),
     table.column({
       header: "Profile ID",
@@ -73,13 +86,6 @@
       header: "Status",
       accessor: "status"
     }),
-    table.column({
-      header: "Actions",
-      accessor: "id",
-      cell: (row) => {
-        return `<DataTableActions id="${row.value}" />`;
-      }
-    }),
   ]);
   const { headerRows, pageRows, tableAttrs, tableBodyAttrs } =
     table.createViewModel(columns);
@@ -88,36 +94,47 @@
 
 <!--create table-->
 <div class="rounded-md border">
-    <Table.Root {...$tableAttrs}>
-      <Table.Header>
-        {#each $headerRows as headerRow}
-          <Subscribe rowAttrs={headerRow.attrs()}>
-            <Table.Row>
-              {#each headerRow.cells as cell (cell.id)}
-                <Subscribe attrs={cell.attrs()} let:attrs props={cell.props()}>
-                  <Table.Head {...attrs}>
-                    <Render of={cell.render()} />
-                  </Table.Head>
-                </Subscribe>
-              {/each}
-            </Table.Row>
-          </Subscribe>
-        {/each}
-      </Table.Header>
-      <Table.Body {...$tableBodyAttrs}>
-        {#each $pageRows as row (row.id)}
-          <Subscribe rowAttrs={row.attrs()} let:rowAttrs>
-            <Table.Row {...rowAttrs}>
-              {#each row.cells as cell (cell.id)}
-                <Subscribe attrs={cell.attrs()} let:attrs>
-                  <Table.Cell {...attrs}>
-                    <Render of={cell.render()} />
-                  </Table.Cell>
-                </Subscribe>
-              {/each}
-            </Table.Row>
-          </Subscribe>
-        {/each}
-      </Table.Body>
-    </Table.Root>
+  {#await dataPromise}
+    <p>Loading...</p>
+  {:then data}
+    {#if data.length > 0}
+        {data}
+      <!--<Table.Root {...$tableAttrs}>
+        <Table.Header>
+          {#each $headerRows as headerRow}
+            <Subscribe rowAttrs={headerRow.attrs()}>
+              <Table.Row>
+                {#each headerRow.cells as cell (cell.id)}
+                  <Subscribe attrs={cell.attrs()} let:attrs props={cell.props()}>
+                    <Table.Head {...attrs}>
+                      <Render of={cell.render()} />
+                    </Table.Head>
+                  </Subscribe>
+                {/each}
+              </Table.Row>
+            </Subscribe>
+          {/each}
+        </Table.Header>
+        <Table.Body {...$tableBodyAttrs}>
+          {#each $pageRows as row (row.id)}
+            <Subscribe rowAttrs={row.attrs()} let:rowAttrs>
+              <Table.Row {...rowAttrs}>
+                {#each row.cells as cell (cell.id)}
+                  <Subscribe attrs={cell.attrs()} let:attrs>
+                    <Table.Cell {...attrs}>
+                      <Render of={cell.render()} />
+                    </Table.Cell>
+                  </Subscribe>
+                {/each}
+              </Table.Row>
+            </Subscribe>
+          {/each}
+        </Table.Body>
+      </Table.Root>-->
+    {:else}
+      <p>No data available</p>
+    {/if}
+  {:catch error}
+    <p>Error: {error.message}</p>
+  {/await}
 </div>

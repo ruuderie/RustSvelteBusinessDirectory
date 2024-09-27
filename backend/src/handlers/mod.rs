@@ -10,3 +10,4 @@ pub mod profiles;
 pub mod user_accounts;
 pub mod users;
 pub mod admin;
+pub mod sessions;

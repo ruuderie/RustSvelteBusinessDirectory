@@ -110,13 +110,20 @@ export async function searchListings(query) {
 export async function fetchAdPurchases() {
   let url = `${API_URL}/admin/ad-purchases`;
   console.log("Fetching ad purchases from:", url);
-  const response = await fetch(url, {
-    headers: getAuthHeaders(),
-  });
-  if (!response.ok) {
-    throw new Error("Failed to fetch ad purchases");
+  try {
+    const response = await fetch(url, {
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Error response:", errorText);
+      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+    }
+    return response.json();
+  } catch (error) {
+    console.error("Failed to fetch ad purchases:", error);
+    throw error;
   }
-  return response.json();
 }
 
 export async function fetchListingById(id) {
