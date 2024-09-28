@@ -5,6 +5,7 @@
   import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '$lib/components/ui/dropdown-menu';
   import { LogOut, UserPlus, Settings, HelpCircle, Command, Sun, Moon } from 'lucide-svelte';
   import { toggleMode } from "mode-watcher";
+  import { logout } from '$lib/auth';
   import { onMount } from 'svelte';
 
   let darkMode;

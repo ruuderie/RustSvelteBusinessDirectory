@@ -1,6 +1,6 @@
 <script>
     import { onMount } from 'svelte';
-    import { readable } from 'svelte/store';
+    import { writable, readable } from 'svelte/store';
     import { fetchUsers } from '$lib/api';
     import DataTableActions from "./data-table-actions.svelte";
     import DataTableCheckbox from "./data-table-checkbox.svelte";
@@ -8,7 +8,7 @@
     import { Button } from "$lib/components/ui/button";
     import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
     import { Input } from "$lib/components/ui/input";
-    import { Render, Subscribe, createRender, createTable } from "svelte-headless-table";
+    import { createTable } from "svelte-headless-table";
     import {
         addHiddenColumns,
         addPagination,
@@ -17,32 +17,43 @@
         addTableFilter,
     } from "svelte-headless-table/plugins";
     import { cn } from "$lib/utils.js";
-    
-    // Import the icons
     import { ChevronDown, ChevronUp } from 'lucide-svelte';
 
     let users = [];
     let loading = true;
     let error = null;
 
+    const filterValue = writable('');
+
+    let table;
+    let tableProps = writable(null);
+
+    const rows = writable([]); // Ensure rows is a writable store
+
     onMount(async () => {
         try {
             users = await fetchUsers();
+            console.log('users', users);
             loading = false;
-            initializeTable();
+            await initializeTable();
+            console.log('tableProps', $tableProps);
+            console.log('tableProps.flatColumns', $tableProps.flatColumns);
+            console.log('tableProps.flatColumns.length', $tableProps.flatColumns?.length);
+            console.log('rows', $rows);
         } catch (err) {
             error = err.message;
             loading = false;
         }
     });
 
-    let table;
-    let tableProps;
+    async function initializeTable() {
+        if (users.length === 0) return;
 
-    function initializeTable() {
-        table = createTable(readable(users), {
+        const data = readable(users);
+
+        table = createTable(data, {
             sort: addSortBy({ disableMultiSort: true }),
-            page: addPagination(),
+            page: addPagination({ initialPageSize: 10 }),
             filter: addTableFilter({
                 fn: ({ filterValue, value }) => value.toLowerCase().includes(filterValue.toLowerCase()),
             }),
@@ -52,89 +63,86 @@
 
         const columns = table.createColumns([
             table.column({
-                header: (_, { pluginStates }) => {
-                    const { allPageRowsSelected } = pluginStates.select;
-                    return createRender(DataTableCheckbox, {
-                        checked: allPageRowsSelected,
-                    });
-                },
-                accessor: "id",
-                cell: ({ row }, { pluginStates }) => {
-                    const { getRowState } = pluginStates.select;
-                    const { isSelected } = getRowState(row);
-
-                    return createRender(DataTableCheckbox, {
-                        checked: isSelected,
-                    });
-                },
-                plugins: {
-                    sort: { disable: true },
-                    filter: { exclude: true },
-                },
+                header: 'Username',
+                accessor: 'username',
             }),
             table.column({
-                header: "Username",
-                accessor: "username",
+                header: 'Email',
+                accessor: 'email',
             }),
             table.column({
-                header: "Email",
-                accessor: "email",
-                cell: ({ value }) => value.toLowerCase(),
-                plugins: {
-                    filter: {
-                        getFilterValue(value) {
-                            return value.toLowerCase();
-                        },
-                    },
-                },
-            }),
-            table.column({
-                header: "Admin",
-                accessor: "is_admin",
+                header: 'Is Admin',
+                accessor: 'is_admin',
                 cell: ({ value }) => value ? 'Yes' : 'No',
             }),
             table.column({
-                header: "Active",
-                accessor: "is_active",
+                header: 'Is Active',
+                accessor: 'is_active',
                 cell: ({ value }) => value ? 'Yes' : 'No',
             }),
             table.column({
-                header: "Created At",
-                accessor: "created_at",
+                header: 'Created At',
+                accessor: 'created_at',
                 cell: ({ value }) => new Date(value).toLocaleString(),
             }),
             table.column({
-                header: "",
-                accessor: ({ id }) => id,
-                cell: (item) => createRender(DataTableActions, { id: item.value }),
-                plugins: { sort: { disable: true } },
+                header: 'Actions',
+                accessor: 'id',
+                cell: ({ value }) => ({
+                    component: DataTableActions,
+                    props: { id: value }
+                })
             }),
         ]);
 
-        tableProps = table.createViewModel(columns);
-        console.log('Full tableProps:', JSON.parse(JSON.stringify(tableProps)));
+        const viewModel = table.createViewModel(columns);
+        tableProps.set(viewModel);
+
+        console.log('Full tableProps after initialization:', JSON.parse(JSON.stringify($tableProps)));
+        console.log('Rows structure:', $tableProps.rows);
+        console.log('First row sample:', $tableProps.rows[0]);
     }
 
-    $: ({ headerRows, pageRows, tableAttrs, tableBodyAttrs, flatColumns, pluginStates, rows } = tableProps || {});
-
-    $: ({ sortKeys } = pluginStates?.sort || {});
-    $: ({ hiddenColumnIds } = pluginStates?.hide || {});
-    $: ({ hasNextPage, hasPreviousPage, pageIndex } = pluginStates?.page || {});
-    $: ({ filterValue } = pluginStates?.filter || {});
-    $: ({ selectedDataIds } = pluginStates?.select || {});
+    $: if (table && $filterValue) {
+        table.filter.setGlobalFilter($filterValue);
+    }
 
     let hideForId = {};
-    $: if (flatColumns) {
+    let flatColumns = [];
+
+    function initializeHideForId() {
         hideForId = Object.fromEntries(flatColumns.map(c => [c.id, true]));
     }
 
-    $: if (hiddenColumnIds) {
-        $hiddenColumnIds = Object.entries(hideForId)
+    $: if ($tableProps) {
+        console.log('tableProps', $tableProps);
+        console.log('tableProps.flatColumns', $tableProps.flatColumns);
+        console.log('tableProps.flatColumns.length', $tableProps.flatColumns?.length);
+        console.log('rows', $rows);
+    }
+
+    $: if (tableProps?.pluginStates?.hide?.hiddenColumnIds) {
+        tableProps.pluginStates.hide.hiddenColumnIds = Object.entries(hideForId)
             .filter(([, hide]) => !hide)
             .map(([id]) => id);
     }
 
     const hideableCols = ["username", "email", "is_admin", "is_active", "created_at"];
+
+    $: if ($tableProps && $tableProps.rows && typeof $tableProps.rows.subscribe === 'function') {
+        $tableProps.rows.subscribe(value => {
+            rows.set(value);
+        });
+    }
+
+    $: if ($rows && typeof $rows.subscribe === 'function') {
+        $rows.subscribe(value => {
+            if (!Array.isArray(value)) {
+                console.error('rows is not an array:', value);
+            }
+        });
+    }
+
 </script>
 
 <div class="w-full">
@@ -151,10 +159,16 @@
                     Columns <ChevronDown class="ml-2 h-4 w-4" />
                 </Button>
             </DropdownMenu.Trigger>
-            <DropdownMenu.Content>
-                {#each flatColumns || [] as col}
+            <DropdownMenu.Content class="bg-white shadow-md rounded-md">
+                {#each tableProps?.flatColumns || [] as col}
                     {#if hideableCols.includes(col.id)}
-                        <DropdownMenu.CheckboxItem bind:checked={hideForId[col.id]}>
+                        <DropdownMenu.CheckboxItem 
+                            checked={hideForId[col.id]} 
+                            onCheckedChange={(checked) => {
+                                hideForId[col.id] = checked;
+                                hideForId = {...hideForId};
+                            }}
+                        >
                             {col.header}
                         </DropdownMenu.CheckboxItem>
                     {/if}
@@ -166,85 +180,87 @@
         <p>Loading users...</p>
     {:else if error}
         <p class="text-red-500">Error: {error}</p>
-    {:else if tableProps}
+    {:else if $tableProps && hideableCols?.length > 0}
         <div class="rounded-md border">
-            <Table.Root {...$tableAttrs}>
+            <Table.Root {...($tableProps.tableAttrs || {})}>
                 <Table.Header>
-                    {#each $headerRows as headerRow}
-                        <Subscribe rowAttrs={headerRow.attrs()}>
-                            <Table.Row>
-                                {#each headerRow.cells as cell (cell.id)}
-                                    <Subscribe
-                                        attrs={cell.attrs()}
-                                        let:attrs
-                                        props={cell.props()}
-                                        let:props
-                                    >
-                                        <Table.Head
-                                            {...attrs}
-                                            class={cn("[&:has([role=checkbox])]:pl-3")}
-                                        >
-                                            {#if cell.id === "email"}
-                                                <Button variant="ghost" on:click={props.sort.toggle}>
-                                                    <Render of={cell.render()} />
-                                                    {#if $sortKeys[0]?.id === cell.id}
-                                                        {#if $sortKeys[0].desc}
-                                                            <ChevronDown class="ml-2 h-4 w-4 text-foreground" />
-                                                        {:else}
-                                                            <ChevronUp class="ml-2 h-4 w-4 text-foreground" />
-                                                        {/if}
-                                                    {:else}
-                                                        <ChevronUp class="ml-2 h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100" />
-                                                    {/if}
-                                                </Button>
+                    <Table.Row>
+                        {#each $tableProps.flatColumns || [] as column (column.id)}
+                            <Table.Head {...(column.headerAttrs || {})} class={cn("[&:has([role=checkbox])]:pl-3")}>
+                                {#if column.id === "email"}
+                                    <Button variant="ghost" on:click={() => column.sort?.toggle?.()}>
+                                        {column.header}
+                                        {#if $tableProps.pluginStates?.sort?.sortKeys?.[0]?.id === column.id}
+                                            {#if $tableProps.pluginStates.sort.sortKeys[0].desc}
+                                                <ChevronDown class="ml-2 h-4 w-4 text-foreground" />
                                             {:else}
-                                                <Render of={cell.render()} />
+                                                <ChevronUp class="ml-2 h-4 w-4 text-foreground" />
                                             {/if}
-                                        </Table.Head>
-                                    </Subscribe>
-                                {/each}
-                            </Table.Row>
-                        </Subscribe>
-                    {/each}
+                                        {:else}
+                                            <ChevronUp class="ml-2 h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                                        {/if}
+                                    </Button>
+                                {:else}
+                                    {column.header}
+                                {/if}
+                            </Table.Head>
+                        {/each}
+                    </Table.Row>
                 </Table.Header>
-                <Table.Body {...$tableBodyAttrs}>
-                    {#each $pageRows as row (row.id)}
-                        <Subscribe rowAttrs={row.attrs()} let:rowAttrs>
-                            <Table.Row
-                                {...rowAttrs}
-                                data-state={$selectedDataIds[row.id] && "selected"}
-                            >
+                <Table.Body {...($tableProps.tableBodyAttrs || {})}>
+                    {#if Array.isArray($rows)}
+                        {#each $rows || [] as row (row.id)}
+                            <Table.Row {...(row.attrs?.() || {})} data-state={$tableProps.pluginStates?.select?.selectedDataIds?.[row.id] && "selected"}>
                                 {#each row.cells as cell (cell.id)}
-                                    <Subscribe attrs={cell.attrs()} let:attrs>
-                                        <Table.Cell class="[&:has([role=checkbox])]:pl-3" {...attrs}>
-                                            <Render of={cell.render()} />
-                                        </Table.Cell>
-                                    </Subscribe>
+                                    <Table.Cell class="[&:has([role=checkbox])]:pl-3" {...(cell.attrs?.() || {})}>
+                                        {#if typeof cell.render === 'function'}
+                                            {#if cell.column.id === 'id'}
+                                                {@const renderResult = cell.render()}
+                                                {#if renderResult && renderResult.component}
+                                                    <svelte:component this={renderResult.component} {...renderResult.props} />
+                                                {:else}
+                                                    {cell.value ?? ''}
+                                                {/if}
+                                            {:else}
+                                                {cell.render()}
+                                            {/if}
+                                        {:else}
+                                            {cell.value ?? ''}
+                                        {/if}
+                                    </Table.Cell>
                                 {/each}
                             </Table.Row>
-                        </Subscribe>
-                    {/each}
+                        {:else}
+                            <Table.Row>
+                                <Table.Cell colspan={$tableProps.flatColumns?.length || 1}>No data available</Table.Cell>
+                            </Table.Row>
+                        {/each}
+                    {:else}
+                        <Table.Row>
+                            <Table.Cell colspan={$tableProps.flatColumns?.length || 1}>No data available</Table.Cell>
+                        </Table.Row>
+                    {/if}
                 </Table.Body>
             </Table.Root>
         </div>
         <div class="flex items-center justify-end space-x-2 py-4">
             <div class="text-muted-foreground flex-1 text-sm">
-                {Object.keys($selectedDataIds).length} of {$rows.length} row(s) selected.
+                {Object.keys($tableProps.pluginStates?.select?.selectedDataIds || {})?.length} of {tableProps.rows?.length || 0} row(s) selected.
             </div>
             <Button
                 variant="outline"
                 size="sm"
-                on:click={() => ($pageIndex = $pageIndex - 1)}
-                disabled={!$hasPreviousPage}>Previous</Button
+                on:click={() => ($tableProps.pluginStates.page.pageIndex = $tableProps.pluginStates.page.pageIndex - 1)}
+                disabled={!$tableProps.pluginStates?.page?.hasPreviousPage}>Previous</Button
             >
             <Button
                 variant="outline"
                 size="sm"
-                disabled={!$hasNextPage}
-                on:click={() => ($pageIndex = $pageIndex + 1)}>Next</Button
+                disabled={!$tableProps.pluginStates?.page?.hasNextPage}
+                on:click={() => ($tableProps.pluginStates.page.pageIndex = $tableProps.pluginStates.page.pageIndex + 1)}>Next</Button
             >
         </div>
     {:else}
-        <p>No data available</p>
+        <p>No data available or table not initialized</p>
     {/if}
 </div>

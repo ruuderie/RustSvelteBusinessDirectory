@@ -5,22 +5,30 @@
     import { goto } from '$app/navigation';
     
     export let id: string;
+    console.log('DataTableActions instantiated with id:', id);
 
-    function viewUserDetails() {
+    function viewUserDetails(): void {
         goto(`/users/${id}`);
     }
 
-    function editUser() {
-        // TODO: Implement edit user functionality
+    function editUser(): void {
         console.log(`Edit user with ID: ${id}`);
     }
 
-    function deactivateUser() {
-        // TODO: Implement deactivate user functionality
+    function deactivateUser(): void {
         console.log(`Deactivate user with ID: ${id}`);
     }
+
+    async function copyUserId(): Promise<void> {
+        try {
+            await navigator.clipboard.writeText(id);
+            console.log(`User ID ${id} copied to clipboard`);
+        } catch (err) {
+            console.error('Failed to copy user ID: ', err);
+        }
+    }
 </script>
-    
+
 <DropdownMenu.Root>
     <DropdownMenu.Trigger asChild let:builder>
         <Button
@@ -33,19 +41,19 @@
             <Ellipsis class="h-4 w-4" />
         </Button>
     </DropdownMenu.Trigger>
-    <DropdownMenu.Content>
+    <DropdownMenu.Content class="w-56 bg-white border border-gray-200 rounded-md shadow-lg">
         <DropdownMenu.Group>
-            <DropdownMenu.Label>Actions</DropdownMenu.Label>
-            <DropdownMenu.Item on:click={viewUserDetails}>
+            <DropdownMenu.Label class="px-2 py-1.5 text-sm font-semibold text-gray-900">Actions</DropdownMenu.Label>
+            <DropdownMenu.Item on:click={viewUserDetails} class="px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
                 View user details
             </DropdownMenu.Item>
-            <DropdownMenu.Item on:click={editUser}>
+            <DropdownMenu.Item on:click={editUser} class="px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
                 Edit user
             </DropdownMenu.Item>
-            <DropdownMenu.Item on:click={deactivateUser}>
+            <DropdownMenu.Item on:click={deactivateUser} class="px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
                 Deactivate user
             </DropdownMenu.Item>
-            <DropdownMenu.Item on:click={() => navigator.clipboard.writeText(id)}>
+            <DropdownMenu.Item on:click={copyUserId} class="px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
                 Copy user ID
             </DropdownMenu.Item>
         </DropdownMenu.Group>
