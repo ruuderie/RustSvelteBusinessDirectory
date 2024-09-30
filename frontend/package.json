@@ -17,11 +17,13 @@
   },
   "type": "module",
   "dependencies": {
+    "@internationalized/date": "^3.5.5",
     "bits-ui": "^0.21.15",
     "clsx": "^2.1.1",
     "formsnap": "^1.0.1",
     "lucide-svelte": "^0.445.0",
     "mode-watcher": "^0.4.1",
+    "svelte-radix": "^1.1.1",
     "sveltekit-superforms": "^2.17.0",
     "tailwind-merge": "^2.5.2",
     "tailwind-variants": "^0.2.1",

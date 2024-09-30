@@ -1,6 +1,17 @@
 <script>
   import UserAuthForm from "$lib/components/UserAuthForm.svelte";
   import { Button } from "$lib/components/ui/button";
+  import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
+  import { checkAuth } from '$lib/auth';
+  import { isAuthenticated } from '$lib/stores/authStore';
+
+  onMount(() => {
+    checkAuth();
+    if ($isAuthenticated) {
+      goto('/');
+    }
+  });
 </script>
 
 <div class="container relative hidden h-[800px] flex-col items-center justify-center md:grid lg:max-w-none lg:grid-cols-2 lg:px-0">

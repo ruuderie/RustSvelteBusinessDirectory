@@ -3,11 +3,16 @@
   import { checkAuth } from '$lib/auth';
   import { fetchDashboardStats } from '$lib/api';
   import { isAuthenticated } from '$lib/stores/authStore';
-  import { Users, ListChecks, DollarSign, BarChart2, Tag } from 'lucide-svelte';
+  import { Users, ListChecks, DollarSign, BarChart2, Download } from 'lucide-svelte';
   import { Button } from "$lib/components/ui/button";
   import * as Card from "$lib/components/ui/card";
   import * as Tabs from "$lib/components/ui/tabs";
   import ChartComponent from '$lib/components/ChartComponent.svelte';
+  import DashboardMainNav from '$lib/components/DashboardMainNav.svelte';
+  import Search from '$lib/components/Search.svelte';
+  import UserNav from '$lib/components/UserNav.svelte';
+  import TeamSwitcher from '$lib/components/TeamSwitcher.svelte';
+  import DatePickerWithRange from '$lib/components/DatePickerWithRange.svelte';
 
   let dashboardStats = null;
   let chartData = {
@@ -37,10 +42,10 @@
   };
 
   async function loadDashboardStats() {
-    if (!$isAuthenticated) return;
+    console.log("loadDashboardStats called");
     try {
       dashboardStats = await fetchDashboardStats();
-      console.log(dashboardStats);
+      console.log("Dashboard stats:", dashboardStats);
       chartData = {
         ...chartData,
         datasets: [{
@@ -53,104 +58,89 @@
     }
   }
 
-  $: if ($isAuthenticated) {
-    loadDashboardStats();
-  }
+  console.log("Script block executed");
 
   onMount(() => {
+    console.log("onMount called");
     checkAuth();
-    if ($isAuthenticated) {
-      loadDashboardStats();
-    }
   });
+
+  $: console.log("isAuthenticated changed:", $isAuthenticated);
+
+  $: if ($isAuthenticated) {
+    console.log("User is authenticated, loading dashboard stats");
+    loadDashboardStats();
+  } else {
+    console.log("User is not authenticated");
+  }
 </script>
 
-<svelte:head>
-  <title>Oply Command Center</title>
-</svelte:head>
-
 {#if $isAuthenticated}
-  <div class="space-y-8">
-    <div class="flex items-center justify-between mb-8">
-      <h2 class="text-3xl font-bold tracking-tight">Dashboard Overview</h2>
-      <Button>
-        <BarChart2 class="mr-2 h-4 w-4" />
-        Generate Report
-      </Button>
+  <div class="flex-col md:flex">
+    <div class="border-b">
+      <div class="flex h-16 items-center px-4">
+        <TeamSwitcher />
+        <DashboardMainNav class="mx-6" />
+        <div class="ml-auto flex items-center space-x-4">
+          <Search />
+          <UserNav />
+        </div>
+      </div>
     </div>
+    <div class="flex-1 space-y-4 p-8 pt-6">
+      <div class="flex items-center justify-between space-y-2">
+        <h2 class="text-3xl font-bold tracking-tight">Dashboard Overview</h2>
+      </div>
 
-    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+      <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+        <Card.Root>
+          <Card.Header class="flex flex-row items-center justify-between space-y-0 pb-2">
+            <Card.Title class="text-sm font-medium">Total Users</Card.Title>
+            <Users class="h-4 w-4 text-muted-foreground" />
+          </Card.Header>
+          <Card.Content>
+            <div class="text-2xl font-bold">{dashboardStats?.totalUsers?.toLocaleString() || '---'}</div>
+          </Card.Content>
+        </Card.Root>
+        <Card.Root>
+          <Card.Header class="flex flex-row items-center justify-between space-y-0 pb-2">
+            <Card.Title class="text-sm font-medium">Active Listings</Card.Title>
+            <ListChecks class="h-4 w-4 text-muted-foreground" />
+          </Card.Header>
+          <Card.Content>
+            <div class="text-2xl font-bold">{dashboardStats?.activeListings?.toLocaleString() || '---'}</div>
+          </Card.Content>
+        </Card.Root>
+        <Card.Root>
+          <Card.Header class="flex flex-row items-center justify-between space-y-0 pb-2">
+            <Card.Title class="text-sm font-medium">Ad Purchases</Card.Title>
+            <DollarSign class="h-4 w-4 text-muted-foreground" />
+          </Card.Header>
+          <Card.Content>
+            <div class="text-2xl font-bold">{dashboardStats?.adPurchases?.toLocaleString() || '---'}</div>
+          </Card.Content>
+        </Card.Root>
+        <Card.Root>
+          <Card.Header class="flex flex-row items-center justify-between space-y-0 pb-2">
+            <Card.Title class="text-sm font-medium">Monthly Revenue</Card.Title>
+            <BarChart2 class="h-4 w-4 text-muted-foreground" />
+          </Card.Header>
+          <Card.Content>
+            <div class="text-2xl font-bold">${dashboardStats?.revenue?.toLocaleString() || '---'}</div>
+          </Card.Content>
+        </Card.Root>
+      </div>
+
       <Card.Root>
-        <Card.Header class="flex flex-row items-center justify-between space-y-0 pb-2">
-          <Card.Title class="text-sm font-medium">Total Users</Card.Title>
-          <Users class="h-4 w-4 text-muted-foreground" />
+        <Card.Header>
+          <Card.Title>Monthly Revenue</Card.Title>
         </Card.Header>
         <Card.Content>
-          <div class="text-2xl font-bold">{dashboardStats?.totalUsers?.toLocaleString() || '---'}</div>
+          <ChartComponent type="bar" data={chartData} options={chartOptions} />
         </Card.Content>
       </Card.Root>
-      <Card.Root>
-        <Card.Header class="flex flex-row items-center justify-between space-y-0 pb-2">
-          <Card.Title class="text-sm font-medium">Active Listings</Card.Title>
-          <ListChecks class="h-4 w-4 text-muted-foreground" />
-        </Card.Header>
-        <Card.Content>
-          <div class="text-2xl font-bold">{dashboardStats?.activeListings?.toLocaleString() || '---'}</div>
-        </Card.Content>
-      </Card.Root>
-      <Card.Root>
-        <Card.Header class="flex flex-row items-center justify-between space-y-0 pb-2">
-          <Card.Title class="text-sm font-medium">Ad Purchases</Card.Title>
-          <DollarSign class="h-4 w-4 text-muted-foreground" />
-        </Card.Header>
-        <Card.Content>
-          <div class="text-2xl font-bold">{dashboardStats?.adPurchases?.toLocaleString() || '---'}</div>
-        </Card.Content>
-      </Card.Root>
-      <Card.Root>
-        <Card.Header class="flex flex-row items-center justify-between space-y-0 pb-2">
-          <Card.Title class="text-sm font-medium">Monthly Revenue</Card.Title>
-          <BarChart2 class="h-4 w-4 text-muted-foreground" />
-        </Card.Header>
-        <Card.Content>
-          <div class="text-2xl font-bold">${dashboardStats?.revenue?.toLocaleString() || '---'}</div>
-        </Card.Content>
-      </Card.Root>
+
     </div>
-
-    <Card.Root>
-      <Card.Header>
-        <Card.Title>Monthly Revenue</Card.Title>
-      </Card.Header>
-      <Card.Content>
-        <ChartComponent type="bar" data={chartData} options={chartOptions} />
-      </Card.Content>
-    </Card.Root>
-
-    <Tabs.Root value="users" class="space-y-4">
-      <Tabs.List>
-        <Tabs.Trigger value="users">Users</Tabs.Trigger>
-        <Tabs.Trigger value="listings">Listings</Tabs.Trigger>
-        <Tabs.Trigger value="ad-purchases">Ad Purchases</Tabs.Trigger>
-        <Tabs.Trigger value="categories">Categories</Tabs.Trigger>
-      </Tabs.List>
-      <Tabs.Content value="users" class="space-y-4">
-        <h3 class="text-xl font-semibold">User Management</h3>
-        <!-- Add user management content here -->
-      </Tabs.Content>
-      <Tabs.Content value="listings" class="space-y-4">
-        <h3 class="text-xl font-semibold">Listing Management</h3>
-        <!-- Add listing management content here -->
-      </Tabs.Content>
-      <Tabs.Content value="ad-purchases" class="space-y-4">
-        <h3 class="text-xl font-semibold">Ad Purchase Management</h3>
-        <!-- Add ad purchase management content here -->
-      </Tabs.Content>
-      <Tabs.Content value="categories" class="space-y-4">
-        <h3 class="text-xl font-semibold">Category Management</h3>
-        <!-- Add category management content here -->
-      </Tabs.Content>
-    </Tabs.Root>
   </div>
 {:else}
   <div class="flex items-center justify-center min-h-screen">
@@ -159,6 +149,9 @@
         <Card.Title>Welcome to Oply Command Center</Card.Title>
         <Card.Description>Please log in to access the dashboard.</Card.Description>
       </Card.Header>
+      <Card.Content>
+        <Button on:click={() => window.location.href = '/login'}>Go to Login</Button>
+      </Card.Content>
     </Card.Root>
   </div>
 {/if}

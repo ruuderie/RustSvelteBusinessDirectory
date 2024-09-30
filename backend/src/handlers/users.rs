@@ -207,7 +207,7 @@ pub async fn login_user(
         password: credentials.password.clone(),
     })).await {
         Ok(session_response) => {
-            tracing::info!("Session created successfully for user: {}", user.id);
+            tracing::info!("Session created from user handler successfully for user: {}", user.id);
             Ok(Json(session_response))
         },
         Err(e) => {

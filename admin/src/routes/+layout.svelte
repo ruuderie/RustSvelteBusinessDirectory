@@ -2,25 +2,37 @@
   import Header from '$lib/components/Header.svelte';
   import '../app.css';
   import { ModeWatcher } from "mode-watcher";
-  import {isAuthenticated } from '$lib/stores/authStore'
-  import {  checkAuth } from '$lib/auth';
+  import { isAuthenticated } from '$lib/stores/authStore'
+  import { checkAuth } from '$lib/auth';
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
-
-  onMount(() => {
-    const darkMode = localStorage.getItem('darkMode') === 'true';
-    document.documentElement.classList.toggle('dark', darkMode);
-  });
+  import { theme } from '$lib/stores/appStore';
 
   onMount(() => {
     if (browser) {
       checkAuth();
+      
+      // Initialize theme
+      const storedTheme = localStorage.getItem('theme');
+      if (storedTheme) {
+        theme.setTheme(storedTheme);
+      } else {
+        const darkMode = localStorage.getItem('darkMode') === 'true';
+        theme.setTheme(darkMode ? 'dark' : 'light');
+      }
     }
   });
 
   $: if (browser && $page) {
     checkAuth();
+  }
+
+  // Subscribe to theme changes
+  $: if (browser) {
+    theme.subscribe(currentTheme => {
+      document.documentElement.classList.toggle('dark', currentTheme === 'dark');
+    });
   }
 </script>
 

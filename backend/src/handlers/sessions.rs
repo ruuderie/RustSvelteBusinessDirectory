@@ -83,7 +83,7 @@ pub async fn create_session(
 
     match new_session.insert(&db).await {
         Ok(_) => {
-            tracing::info!("Session created successfully for user: {}", user.id);
+            tracing::info!("Session created from session handler successfully for user: {}", user.id);
             Ok(SessionResponse { token })
         }
         Err(e) => {
