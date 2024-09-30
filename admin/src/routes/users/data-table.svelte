@@ -1,7 +1,7 @@
 <script>
     import { onMount } from 'svelte';
     import { writable, readable } from 'svelte/store';
-    import { fetchUsers } from '$lib/api';
+    import { api } from '$lib/api';  // Update this import
     import DataTableActions from "./data-table-actions.svelte";
     import DataTableCheckbox from "./data-table-checkbox.svelte";
     import * as Table from "$lib/components/ui/table";
@@ -26,13 +26,13 @@
     const filterValue = writable('');
 
     let table;
-    let tableProps = writable(null);
+    const tableProps = writable(null);
 
     const rows = writable([]); // Ensure rows is a writable store
 
     onMount(async () => {
         try {
-            users = await fetchUsers();
+            users = await api.admin.fetchUsers();  // Update this line
             console.log('users', users);
             loading = false;
             await initializeTable();
@@ -108,7 +108,7 @@
     }
 
     let hideForId = {};
-    let flatColumns = [];
+    const flatColumns = [];
 
     function initializeHideForId() {
         hideForId = Object.fromEntries(flatColumns.map(c => [c.id, true]));

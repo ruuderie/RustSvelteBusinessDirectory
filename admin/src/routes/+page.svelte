@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { checkAuth } from '$lib/auth';
-  import { fetchDashboardStats } from '$lib/api';
+  import { api } from '$lib/api';  // Update this import
   import { isAuthenticated } from '$lib/stores/authStore';
   import { Users, ListChecks, DollarSign, BarChart2, Download } from 'lucide-svelte';
   import { Button } from "$lib/components/ui/button";
@@ -28,7 +28,7 @@
     ]
   };
 
-  let chartOptions = {
+  const chartOptions = {
     responsive: true,
     plugins: {
       legend: {
@@ -44,7 +44,7 @@
   async function loadDashboardStats() {
     console.log("loadDashboardStats called");
     try {
-      dashboardStats = await fetchDashboardStats();
+      dashboardStats = await api.admin.fetchDashboardStats();  // Update this line
       console.log("Dashboard stats:", dashboardStats);
       chartData = {
         ...chartData,

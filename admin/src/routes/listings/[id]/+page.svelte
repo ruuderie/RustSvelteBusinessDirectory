@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { fetchListingById } from '$lib/api';
+  import { api } from '$lib/api';  // Update this import
 
   let listing = null;
   let loading = true;
@@ -10,7 +10,7 @@
   onMount(async () => {
     const id = $page.params.id;
     try {
-      listing = await fetchListingById(id);
+      listing = await api.listing.fetchListingById(id);  // Update this line
       console.log("Listing:", listing);
       loading = false;
     } catch (err) {
@@ -21,7 +21,7 @@
 </script>
 
 <svelte:head>
-  <title>{listing ? listing.name : 'Loading...'} | Listing Directory</title>
+  <title>{listing ? listing.name : 'Loading...'} | Listing Details</title>
 </svelte:head>
 
 <div class="container mx-auto px-4 py-8">

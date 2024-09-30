@@ -1,7 +1,7 @@
 <script>
 
     // import data from api.js 
-    import { fetchAdPurchases } from '$lib/api';
+    import { api } from '$lib/api'; 
     import { readable } from "svelte/store";
     import DataTableActions from "./data-table-actions.svelte";
   //  import DataTableCheckbox from "./data-table/data-table-checkbox.svelte";
@@ -31,7 +31,7 @@
 
   const fetchData = async () => {
     try {
-      const data = await fetchAdPurchases();
+      const data = await api.admin.fetchAdPurchases();  // Update this line
       console.log("Fetched ad purchases:", data);
       return data;
     } catch (error) {
@@ -44,7 +44,7 @@
     }
   };
 
-  let dataPromise = fetchData();
+  const dataPromise = fetchData();
   const table = createTable(readable(dataPromise));
 
   const columns = table.createColumns([

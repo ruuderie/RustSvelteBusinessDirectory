@@ -4,7 +4,7 @@
     import { Popover } from "$lib/components/ui/popover";
     import { DateRangePicker } from "./date-range-picker.svelte";
   
-    let dateRange = { from: new Date(), to: new Date() };
+    const dateRange = { from: new Date(), to: new Date() };
   
     function formatDate(date) {
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });

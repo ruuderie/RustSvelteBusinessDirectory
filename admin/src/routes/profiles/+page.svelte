@@ -1,55 +1,62 @@
 <script>
   import { onMount } from 'svelte';
-  import { page } from '$app/stores';
-  import { fetchListingById } from '$lib/api';
+  import { api } from '$lib/api';  // Update this import
+  import ProfileCard from '$lib/components/ProfileCard.svelte';
+  import SearchBar from '$lib/components/SearchBar.svelte';
+  import { writable } from 'svelte/store';
 
-  let listing = null;
+  let profiles = [];
+  let filteredProfiles = [];
   let loading = true;
   let error = null;
 
+  const searchQuery = writable('');
+
   onMount(async () => {
-    const id = $page.params.id;
     try {
-      listing = await fetchListingById(id);
-      console.log("Listing:", listing);
+      profiles = await api.admin.fetchUsers();  // Update this line
+      filteredProfiles = profiles;
       loading = false;
     } catch (err) {
       error = err.message;
       loading = false;
     }
   });
+
+  $: {
+    if (profiles.length > 0) {
+      filteredProfiles = profiles.filter(profile =>
+        profile.username.toLowerCase().includes($searchQuery.toLowerCase()) ||
+        profile.email.toLowerCase().includes($searchQuery.toLowerCase())
+      );
+    }
+  }
+
+  function handleSearch(event) {
+    searchQuery.set(event.detail);
+  }
 </script>
 
 <svelte:head>
-  <title>{listing ? listing.name : 'Loading...'} | Listing Directory</title>
+  <title>User Profiles | Admin Dashboard</title>
 </svelte:head>
 
 <div class="container mx-auto px-4 py-8">
+  <h1 class="text-3xl font-bold mb-8">User Profiles</h1>
+
+  <SearchBar on:search={handleSearch} />
+
   {#if loading}
-    <p class="text-center text-xl">Loading listing details...</p>
+    <p class="text-center text-xl mt-8">Loading profiles...</p>
   {:else if error}
-    <p class="text-center text-xl text-red-500">Error: {error}</p>
-  {:else if listing}
-    <div class="bg-white shadow-lg rounded-lg overflow-hidden">
-      <div class="px-6 py-4">
-        <h1 class="text-3xl font-bold mb-4">{listing.title}</h1>
-        <p class="text-gray-700 text-xl mb-2"><span class="font-semibold">Category:</span> {listing.category_id}</p>
-        <p class="text-gray-700 text-xl mb-2"><span class="font-semibold">Address:</span> {listing.city}, {listing.state} {listing.neighborhood}</p>
-        <p class="text-gray-700 text-xl mb-2"><span class="font-semibold">Phone:</span> {listing.phone}</p>
-        <p class="text-gray-700 text-xl mb-2">
-          <span class="font-semibold">Website:</span> 
-          <a href={listing.website} target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">
-            {listing.website}
-          </a>
-        </p>
-      </div>
-    </div>
-    <div class="mt-8 text-center">
-      <a href="/" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-        Back to Listing List
-      </a>
+    <p class="text-center text-xl text-red-500 mt-8">Error: {error}</p>
+  {:else if filteredProfiles.length > 0}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+      {#each filteredProfiles as profile (profile.id)}
+        <ProfileCard {profile} />
+      {/each}
     </div>
   {:else}
-    <p class="text-center text-xl">Listing not found.</p>
+    <p class="text-center text-xl mt-8">No profiles found.</p>
   {/if}
 </div>

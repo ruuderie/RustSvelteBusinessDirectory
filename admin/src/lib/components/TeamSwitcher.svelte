@@ -5,14 +5,14 @@
   import { ChevronDown } from 'lucide-svelte';
   
   // Import the images directly
-  import companyIcon from '$lib/icons/company_60.png';
-  import teamMemberIcon from '$lib/icons/team_member_60.png';
+  import companyIcon from '$lib/assets/icons/company_60.png';
+  import teamMemberIcon from '$lib/assets/icons/team_member_60.png';
 
   // Import the theme store
   import { theme } from '$lib/stores/appStore';
 
   let selectedTeam = { name: 'Oply', image: companyIcon };
-  let teams = [
+  const teams = [
     { name: 'Oply', image: companyIcon },
     { name: 'Personal', image: teamMemberIcon },
   ];

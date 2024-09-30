@@ -1,7 +1,7 @@
 <script>
     import { onMount } from 'svelte';
     import { selectedDirectoryId, isProduction } from '$lib/stores/directoryStore';
-    import { fetchDirectories } from '$lib/api';
+    import { api } from '$lib/api';
 
     let directories = [];
     let loading = true;
@@ -10,7 +10,7 @@
     onMount(async () => {
         if (!$isProduction) {
             try {
-                directories = await fetchDirectories();
+                directories = await api.admin.fetchDirectories();
                 if (directories.length > 0 && !$selectedDirectoryId) {
                     $selectedDirectoryId = directories[0].id;
                 }

@@ -3,14 +3,14 @@
     import { cn } from "$lib/utils";
 
     // Import icons
-    import homeIcon from '$lib/icons/home.svg';
-    import userIcon from '$lib/icons/user.svg';
-    import folderIcon from '$lib/icons/folder.svg';
-    import announcementIcon from '$lib/icons/announcement.svg';
-    import adIcon from '$lib/icons/campaign.svg';
-    import profileIcon from '$lib/icons/avatar.svg';
-    import templateIcon from '$lib/icons/template.svg';
-    import reportIcon from '$lib/icons/report.svg';
+    import homeIcon from '$lib/assets/icons/home.svg';
+    import userIcon from '$lib/assets/icons/user.svg';
+    import folderIcon from '$lib/assets/icons/folder.svg';
+    import announcementIcon from '$lib/assets/icons/announcement.svg';
+    import adIcon from '$lib/assets/icons/campaign.svg';
+    import profileIcon from '$lib/assets/icons/avatar.svg';
+    import templateIcon from '$lib/assets/icons/template.svg';
+    import reportIcon from '$lib/assets/icons/report.svg';
 
     let className = '';
     export { className as class };

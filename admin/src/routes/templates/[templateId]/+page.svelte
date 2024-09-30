@@ -1,17 +1,17 @@
 <script>
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { fetchListingById } from '$lib/api';
+  import { api } from '$lib/api';
 
-  let listing = null;
+  let template = null;
   let loading = true;
   let error = null;
 
   onMount(async () => {
     const id = $page.params.id;
     try {
-      listing = await fetchListingById(id);
-      console.log("Listing:", listing);
+      template = await api.admin.fetchTemplateById(id);
+      console.log("Template:", template);
       loading = false;
     } catch (err) {
       error = err.message;
@@ -21,7 +21,7 @@
 </script>
 
 <svelte:head>
-  <title>{listing ? listing.name : 'Loading...'} | Listing Directory</title>
+  <title>{template ? template.name : 'Loading...'} | Template Detail</title>
 </svelte:head>
 
 <div class="container mx-auto px-4 py-8">
@@ -29,27 +29,19 @@
     <p class="text-center text-xl">Loading listing details...</p>
   {:else if error}
     <p class="text-center text-xl text-red-500">Error: {error}</p>
-  {:else if listing}
+  {:else if template}
     <div class="bg-white shadow-lg rounded-lg overflow-hidden">
       <div class="px-6 py-4">
-        <h1 class="text-3xl font-bold mb-4">{listing.title}</h1>
-        <p class="text-gray-700 text-xl mb-2"><span class="font-semibold">Category:</span> {listing.category_id}</p>
-        <p class="text-gray-700 text-xl mb-2"><span class="font-semibold">Address:</span> {listing.city}, {listing.state} {listing.neighborhood}</p>
-        <p class="text-gray-700 text-xl mb-2"><span class="font-semibold">Phone:</span> {listing.phone}</p>
-        <p class="text-gray-700 text-xl mb-2">
-          <span class="font-semibold">Website:</span> 
-          <a href={listing.website} target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">
-            {listing.website}
-          </a>
-        </p>
+        <h1 class="text-3xl font-bold mb-4">{template.name}</h1>
+        <p class="text-gray-700 text-xl mb-2"><span class="font-semibold">Directory:</span> {template.directory_id}</p>
       </div>
     </div>
     <div class="mt-8 text-center">
       <a href="/" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-        Back to Listing List
+        Back to Templates List
       </a>
     </div>
   {:else}
-    <p class="text-center text-xl">Listing not found.</p>
+    <p class="text-center text-xl">Template not found.</p>
   {/if}
 </div>

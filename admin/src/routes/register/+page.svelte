@@ -1,22 +1,24 @@
 <script>
     import UserRegistration from '$lib/components/UserRegistration.svelte';
-    import { registerUser } from '$lib/api';
+    import { api } from '$lib/api';  // Update this import
+    import { goto } from '$app/navigation';
   
     let errorMessage = '';
   
     async function handleRegister(event) {
       const { username, email, password } = event.detail;
       try {
-        await registerUser({ username, email, password });
-        window.location.href = '/login';
+        await api.user.register({ username, email, password });  // Update this line
+        goto('/login');  // Use goto for client-side navigation
       } catch (err) {
-        errorMessage = 'Registration failed. Please try again.';
+        console.error('Registration error:', err);
+        errorMessage = err.message || 'Registration failed. Please try again.';
       }
     }
-  </script>
+</script>
   
-  <UserRegistration on:register={handleRegister} {errorMessage} />
+<UserRegistration on:register={handleRegister} {errorMessage} />
   
-  {#if errorMessage}
-    <p class="text-red-500 text-center mt-4">{errorMessage}</p>
-  {/if}
+{#if errorMessage}
+  <p class="text-red-500 text-center mt-4">{errorMessage}</p>
+{/if}

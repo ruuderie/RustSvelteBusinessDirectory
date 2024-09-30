@@ -5,16 +5,16 @@
     import { Label } from "$lib/components/ui/label";
     import { cn } from "$lib/utils";
     import { Lock, Loader2, UserPlus } from 'lucide-svelte';
-    import { loginUser, registerUser } from '$lib/api'; // Import both loginUser and registerUser
+    import { api } from '$lib/api'; // Import the api module
     import { goto } from '$app/navigation';
     import { login } from '$lib/auth';
-  
+
     const dispatch = createEventDispatcher();
-  
+
     let className = undefined;
     export { className as class };
-    export let mode = 'login'; // 'login' or 'register'
-  
+    export const mode = 'login'; // 'login' or 'register'
+
     let isLoading = false;
     let username = '';
     let email = '';
@@ -29,19 +29,19 @@
       
       try {
         if (mode === 'login') {
-          const data = await loginUser({ email, password });
+          const data = await api.user.login({ email, password });
           if (data.token) {
-            login(data.token); // Use the login function from auth.js
+            login(data.token);
             dispatch('login', { email, password });
-            goto('/'); // Redirect to home page after successful login
+            goto('/');
           } else {
             throw new Error('Login successful, but no token received');
           }
         } else {
-          const data = await registerUser({ username, email, password });
-          login(data.token); // Log in the user after successful registration
+          const data = await api.user.register({ username, email, password });
+          login(data.token);
           dispatch('register', { username, email, password });
-          goto('/'); // Redirect to home page after successful registration
+          goto('/');
         }
       } catch (error) {
         errorMessage = error.message;

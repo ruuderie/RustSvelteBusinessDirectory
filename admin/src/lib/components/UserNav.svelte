@@ -4,7 +4,7 @@
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import { User, Settings, LogOut } from 'lucide-svelte';
 
-  export let user = { name: 'Admin User', email: 'admin@oply.com' };
+  export const user = { name: 'Admin User', email: 'admin@oply.com' };
 
   const dispatch = createEventDispatcher();
 
