@@ -20,7 +20,7 @@ pub async fn auth_middleware<B>(
 
     let path = req.uri().path();
 
-    if path == "/login" || path == "/register" || is_public_route(path) {
+    if path == "/login" || path == "/register" || path == "/refresh-token" || is_public_route(path) {
         tracing::debug!("Public route detected, skipping authentication");
         return Ok(next.run(req).await);
     }
@@ -46,6 +46,12 @@ pub async fn auth_middleware<B>(
     {
         Ok(Some(session)) => {
             if session.token_expiration < Utc::now() {
+                tracing::info!("Session details: {:?}", session);
+                tracing::info!("Session is active: {:?}", session.is_active);
+                tracing::info!("Session integrity: {:?}", session.verify_integrity());
+                tracing::info!("Session token expiration: {:?}", session.token_expiration);
+                tracing::info!("Session refresh token expiration: {:?}", session.refresh_token_expiration);
+                tracing::info!("time now: {:?}", Utc::now());
                 tracing::warn!("Token has expired. Please refresh the token.");
                 return Err(StatusCode::UNAUTHORIZED);
             }
@@ -117,6 +123,8 @@ pub async fn auth_middleware<B>(
             return Err(StatusCode::UNAUTHORIZED);
         }
     } else {
+        tracing::debug!("Session is active and not expired");
+
         // Update last_accessed_at
         session::Entity::update(session::ActiveModel {
             id: Set(session.id),

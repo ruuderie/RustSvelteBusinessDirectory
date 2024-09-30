@@ -1,7 +1,8 @@
 use axum::{
-    extract::{Extension, Json},
-    http::StatusCode,
+    extract::{Extension, Json, TypedHeader},
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
+    headers::{Authorization, authorization::Bearer},
 };
 use sea_orm::{DatabaseConnection, ColumnTrait, EntityTrait, Set, ActiveModelTrait, QueryFilter};
 use uuid::Uuid;
@@ -95,16 +96,40 @@ pub async fn create_session(
 
 pub async fn validate_session(
     Extension(db): Extension<DatabaseConnection>,
-    Extension(session): Extension<session::Model>,
+    TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    let token = bearer.token().to_string();
+    
+    let session = match session::Entity::find()
+        .filter(session::Column::BearerToken.eq(token))
+        .one(&db)
+        .await
+    {
+        Ok(Some(session)) => session,
+        Ok(None) => {
+            tracing::warn!("No session found for token");
+            return Err(StatusCode::UNAUTHORIZED);
+        },
+        Err(e) => {
+            tracing::error!("Database error when fetching session: {:?}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    if !session.is_active || !session.verify_integrity() {
+        tracing::warn!("Session is inactive or failed integrity check");
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
     if session.token_expiration < Utc::now() {
+        tracing::warn!("Session has expired");
         return Err(StatusCode::UNAUTHORIZED);
     }
 
     // Update last_accessed_at
-    let mut session: session::ActiveModel = session.into();
-    session.last_accessed_at = Set(Utc::now());
-    session.update(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut updated_session: session::ActiveModel = session.into();
+    updated_session.last_accessed_at = Set(Utc::now());
+    updated_session.update(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::OK)
 }
@@ -137,13 +162,42 @@ pub async fn refresh_token(
     Extension(db): Extension<DatabaseConnection>,
     Extension(current_session): Extension<session::Model>,
 ) -> Result<Json<SessionResponse>, StatusCode> {
-    let user = user::Entity::find_by_id(current_session.user_id)
-        .one(&db)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::UNAUTHORIZED)?;
+    tracing::info!("Refreshing token for user: {}", current_session.user_id);
+    tracing::debug!("Current session: {:?}", current_session);
 
-    let new_token = generate_jwt(&user).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if current_session.refresh_token_expiration < Utc::now() {
+        tracing::warn!("Refresh token has expired for user: {}", current_session.user_id);
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    let user = match user::Entity::find_by_id(current_session.user_id)
+        .one(&db)
+        .await {
+            Ok(Some(user)) => {
+                tracing::debug!("User found: {:?}", user);
+                user
+            },
+            Ok(None) => {
+                tracing::error!("User not found for session: {:?}", current_session);
+                return Err(StatusCode::UNAUTHORIZED);
+            },
+            Err(e) => {
+                tracing::error!("Database error when finding user: {:?}", e);
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        };
+
+    let new_token = match generate_jwt(&user) {
+        Ok(token) => {
+            tracing::debug!("New token generated: {}", token);
+            token
+        },
+        Err(e) => {
+            tracing::error!("Error generating JWT: {:?}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
     let new_expiration = Utc::now() + chrono::Duration::hours(1);
 
     let mut session: session::ActiveModel = current_session.into();
@@ -151,7 +205,14 @@ pub async fn refresh_token(
     session.token_expiration = Set(new_expiration);
     session.last_accessed_at = Set(Utc::now());
 
-    session.update(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    Ok(Json(SessionResponse { token: new_token }))
+    match session.update(&db).await {
+        Ok(updated_session) => {
+            tracing::info!("Session updated successfully: {:?}", updated_session);
+            Ok(Json(SessionResponse { token: new_token }))
+        },
+        Err(e) => {
+            tracing::error!("Error updating session: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }

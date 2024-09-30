@@ -12,18 +12,31 @@ if (import.meta.env.BASE_URL && import.meta.env.BASE_URL !== '/') {
 const API_URL = import.meta.env.API_URL || `${BASE_URL}/api`;
 
 async function refreshToken() {
-  const response = await fetch(`${BASE_URL}/refresh-token`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-  });
+  try {
+    console.log("Refreshing token");
+    const response = await fetch(`${BASE_URL}/refresh-token`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
 
-  if (!response.ok) {
-    throw new Error('Failed to refresh token');
+    if (!response.ok) {
+      console.error("Failed to refresh token. Status:", response.status);
+      return { success: false, error: `Failed to refresh token. Status: ${response.status}` };
+    } else{
+      console.log("Token refreshed successfully");
+    }
+
+    const data = await response.json();
+    console.log('Refresh token response data:', data);
+
+    localStorage.setItem('authToken', data.token);
+    console.log('New auth token set in localStorage');
+
+    return { success: true, token: data.token };
+  } catch (error) {
+    console.error('Error in refreshToken:', error);
+    return { success: false, error: error.message };
   }
-
-  const data = await response.json();
-  localStorage.setItem('authToken', data.token);
-  return data.token;
 }
 
 function getAuthHeaders() {
@@ -42,9 +55,16 @@ async function apiCall(resource, endpoint, options = {}) {
     let response = await fetch(url, options);
 
     if (response.status === 401) {
-      const newToken = await refreshToken();
-      options.headers['Authorization'] = `Bearer ${newToken}`;
-      response = await fetch(url, options);
+      console.log("Token expired, attempting to refresh...");
+      const refreshResult = await refreshToken();
+      if (refreshResult.success) {
+        console.log("Token refreshed successfully, retrying original request");
+        options.headers['Authorization'] = `Bearer ${refreshResult.token}`;
+        response = await fetch(url, options);
+      } else {
+        console.error("Failed to refresh token:", refreshResult.error);
+        throw new Error("Authentication failed. Please log in again.");
+      }
     }
 
     if (!response.ok) {
@@ -55,6 +75,25 @@ async function apiCall(resource, endpoint, options = {}) {
   } catch (error) {
     console.error('API call failed:', error);
     throw error;
+  }
+}
+
+async function verifySession() {
+  try {
+    const response = await fetch(`${BASE_URL}/validate-session`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      console.error("Failed to verify session. Status:", response.status);
+      return { isValid: false, error: `Failed to verify session. Status: ${response.status}` };
+    }
+
+    return { isValid: true };
+  } catch (error) {
+    console.error('Error in verifySession:', error);
+    return { isValid: false, error: error.message };
   }
 }
 
@@ -104,6 +143,7 @@ const userApi = {
     method: 'PUT', 
     body: JSON.stringify(profileData) 
   }),
+  verifySession: verifySession,
 };
 
 const listingApi = {
