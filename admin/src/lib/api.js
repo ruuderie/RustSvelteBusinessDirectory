@@ -47,14 +47,20 @@ function getAuthHeaders() {
   };
 }
 
-async function apiCall(resource, endpoint, options = {}) {
-  const url = `${API_URL}/${resource}${endpoint}`;
-  options.headers = { ...options.headers, ...getAuthHeaders() };
+async function apiCall(endpoint, options = {}, isPublic = false) {
+  console.log("API call endpoint:", endpoint);
+  console.log("API call options:", options);
   
+  const url = isPublic ? `${BASE_URL}${endpoint}` : `${API_URL}${endpoint}`;
+  if (!isPublic) {
+    options.headers = { ...options.headers, ...getAuthHeaders() };
+  }
+  console.log("API call URL:", url);
+
   try {
     let response = await fetch(url, options);
 
-    if (response.status === 401) {
+    if (response.status === 401 && !isPublic) {
       console.log("Token expired, attempting to refresh...");
       const refreshResult = await refreshToken();
       if (refreshResult.success) {
@@ -80,10 +86,14 @@ async function apiCall(resource, endpoint, options = {}) {
 
 async function verifySession() {
   try {
+    console.log("Verifying session");
+    console.log("Auth headers:", getAuthHeaders());
+    console.log("BASE_URL:", BASE_URL);
     const response = await fetch(`${BASE_URL}/validate-session`, {
       method: 'GET',
       headers: getAuthHeaders(),
     });
+    console.log("Response:", response);
 
     if (!response.ok) {
       console.error("Failed to verify session. Status:", response.status);
@@ -100,46 +110,23 @@ async function verifySession() {
 const userApi = {
   login: (credentials) => {
     console.log("Attempting to log in user:", credentials.email);
-    console.log("Login URL:", `${BASE_URL}/login`);
-    return fetch(`${BASE_URL}/login`, {
+    return apiCall('/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(credentials),
-    }).then(response => {
-      console.log("Login response status:", response.status);
-      if (!response.ok) {
-        return response.json().then(errorData => {
-          console.error("Login error:", errorData);
-          const error = new Error(errorData.message || 'Failed to login');
-          error.status = response.status;
-          error.details = errorData.errors;
-          throw error;
-        });
-      }
-      return response.json().then(data => {
-        console.log("Login successful, received data:", data);
-        return data;
-      });
-    });
+    }, true);
   },
   register: (userData) => {
     console.log("Registering user");
-    return fetch(`${BASE_URL}/register`, {
+    return apiCall('/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userData),
-    }).then(response => {
-      if (!response.ok) {
-        const error = new Error('Failed to register user');
-        error.status = response.status;
-        throw error;
-      }
-      return response.json();
-    });
+    }, true);
   },
-  logout: () => apiCall('users', '/logout', { method: 'POST' }),
-  getProfile: () => apiCall('users', '/profile'),
-  updateProfile: (profileData) => apiCall('users', '/profile', { 
+  logout: () => apiCall('/logout', { method: 'POST' }),
+  getProfile: () => apiCall('/users/profile'),
+  updateProfile: (profileData) => apiCall('/users/profile', { 
     method: 'PUT', 
     body: JSON.stringify(profileData) 
   }),
@@ -152,22 +139,22 @@ const listingApi = {
     if (!directoryId) {
       throw new Error("No directory selected");
     }
-    return apiCall('listings', `?directory_id=${directoryId}`);
+    return apiCall(`/listings?directory_id=${directoryId}`, {}, true);
   },
   searchListings: (query) => {
     const directoryId = get(effectiveDirectoryId);
     if (!directoryId) {
       throw new Error("No directory selected");
     }
-    return apiCall('listings', `/search?q=${query}&directory_id=${directoryId}`);
+    return apiCall(`/listings/search?q=${query}&directory_id=${directoryId}`, {}, true);
   },
-  fetchListingById: (id) => apiCall('listings', `/${id}`),
+  fetchListingById: (id) => apiCall(`/listings/${id}`, {}, true),
 };
 
 const adminApi = {
   fetchDashboardStats: () => {
     if (env === 'production') {
-      return apiCall('admin', '/dashboard-stats');
+      return apiCall('/admin/dashboard-stats');
     } else {
       console.log('Using fake dashboard stats for non-production environment');
       return new Promise(resolve => {
@@ -187,9 +174,14 @@ const adminApi = {
       });
     }
   },
-  fetchAdPurchases: () => apiCall('admin', '/ad-purchases'),
-  fetchUsers: () => apiCall('admin', '/users'),
-  fetchDirectories: () => apiCall('admin', '/directories'), // Add this line
+  fetchAdPurchases: () => apiCall('/admin/ad-purchases'),
+  fetchUsers: () => apiCall('/admin/users'),
+  fetchDirectories: () => apiCall('/admin/directories'),
+  fetchUserById: (userId) => apiCall(`/admin/users/${userId}`),
+  updateUser: (userId, userData) => apiCall(`/admin/users/${userId}`, {
+    method: 'PUT',
+    body: JSON.stringify(userData)
+  }),
 };
 
 export const api = {

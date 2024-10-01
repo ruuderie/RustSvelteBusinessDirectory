@@ -13,6 +13,7 @@
   import UserNav from '$lib/components/UserNav.svelte';
   import TeamSwitcher from '$lib/components/TeamSwitcher.svelte';
   import DatePickerWithRange from '$lib/components/DatePickerWithRange.svelte';
+  import { goto } from '$app/navigation';
 
   let dashboardStats = null;
   let chartData = {
@@ -72,6 +73,11 @@
     loadDashboardStats();
   } else {
     console.log("User is not authenticated");
+  }
+
+  function handleLogin() {
+    console.log("Navigating to login page");
+    goto('/login');
   }
 </script>
 
@@ -145,13 +151,15 @@
 {:else}
   <div class="flex items-center justify-center min-h-screen">
     <Card.Root class="w-[350px]">
+      <center>
       <Card.Header>
-        <Card.Title>Welcome to Oply Command Center</Card.Title>
-        <Card.Description>Please log in to access the dashboard.</Card.Description>
+        <Card.Title>Welcome</Card.Title>
+        <Card.Description>Please log in to access the portal.</Card.Description>
       </Card.Header>
       <Card.Content>
-        <Button on:click={() => window.location.href = '/login'}>Go to Login</Button>
-      </Card.Content>
-    </Card.Root>
+          <Button on:click={handleLogin}>Go to Login</Button>
+        </Card.Content>
+        </center>
+      </Card.Root>
   </div>
 {/if}

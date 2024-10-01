@@ -7,11 +7,10 @@
   import { isAuthenticated } from '$lib/stores/authStore';
 
   onMount(() => {
+    console.log("onMount called on login page");
     checkAuth();
     if ($isAuthenticated) {
       goto('/');
-    } else {
-      console.log("Not authenticated, staying on login page");
     }
   });
 </script>

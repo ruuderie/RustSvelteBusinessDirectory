@@ -7,6 +7,7 @@
   import { toggleMode } from "mode-watcher";
   import { logout } from '$lib/auth';
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
 
   let darkMode;
 
@@ -19,6 +20,14 @@
     darkMode = !darkMode;
     document.documentElement.classList.toggle('dark', darkMode);
     localStorage.setItem('darkMode', darkMode);
+  }
+
+  function handleLogin() {
+    goto('/login');
+  }
+
+  function handleRegister() {
+    goto('/register');
   }
 </script>
 
@@ -65,10 +74,10 @@
           </DropdownMenuContent>
         </DropdownMenu>
       {:else}
-        <Button variant="ghost" href="/login" class="text-muted-foreground hover:text-foreground">
+        <Button variant="ghost" on:click={handleLogin} class="text-muted-foreground hover:text-foreground">
           Login
         </Button>
-        <Button variant="default" href="/register" class="bg-primary text-primary-foreground hover:bg-primary/90">
+        <Button variant="default" on:click={handleRegister} class="bg-primary text-primary-foreground hover:bg-primary/90">
           <UserPlus class="mr-2 h-4 w-4" />
           Register
         </Button>

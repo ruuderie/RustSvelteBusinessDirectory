@@ -14,13 +14,18 @@ export async function checkAuth() {
         const sessionInfo = await api.user.verifySession();
         if (sessionInfo.isValid) {
           isAuthenticated.set(true);
-          // we can store additional user info if needed
-          // For example: userStore.set(sessionInfo.user);
           return true;
         } else {
-          // Token is invalid or expired
-          logout();
-          return false;
+          // Token is invalid or expired, try to refresh
+          const refreshResult = await api.user.refreshToken();
+          if (refreshResult.success) {
+            isAuthenticated.set(true);
+            return true;
+          } else {
+            console.error('Failed to refresh token:', refreshResult.error);
+            logout();
+            return false;
+          }
         }
       } catch (error) {
         console.error('Error verifying session:', error);
@@ -51,7 +56,7 @@ export function logout() {
     // For example: userStore.set(null);
   }
 }
-
+/*
 // Update this function in your API file
 export async function loginUser(credentials) {
   console.log("Logging in user");
@@ -71,3 +76,4 @@ export async function loginUser(credentials) {
   login(data.token); // Store the token
   return data;
 }
+  */

@@ -18,6 +18,8 @@
     } from "svelte-headless-table/plugins";
     import { cn } from "$lib/utils.js";
     import { ChevronDown, ChevronUp } from 'lucide-svelte';
+    import { Plus } from 'lucide-svelte';
+    import { goto } from '$app/navigation';
 
     let users = [];
     let loading = true;
@@ -103,6 +105,10 @@
         console.log('First row sample:', $tableProps.rows[0]);
     }
 
+    function handleCreateUser() {
+        goto('/users/create');
+    }
+
     $: if (table && $filterValue) {
         table.filter.setGlobalFilter($filterValue);
     }
@@ -153,6 +159,10 @@
             type="text"
             bind:value={$filterValue}
         />
+        <Button variant="outline" on:click={handleCreateUser} class="ml-auto">
+            <Plus class="mr-2 h-4 w-4" />
+            Create User
+        </Button>
         <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild let:builder>
                 <Button variant="outline" class="ml-auto" builders={[builder]}>
