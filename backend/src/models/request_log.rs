@@ -7,6 +7,15 @@ use sea_orm::{IntoActiveModel, Set};
 use crate::entities::listing;
 use std::str::FromStr;
 
+#[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
+#[sea_orm(rs_type = "String", db_type = "String(Some(32))")]
+pub enum RequestStatus {
+    #[sea_orm(string_value = "success")]
+    Success,
+    #[sea_orm(string_value = "failure")]
+    Failure,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct RequestLog {
     pub id: Uuid,
@@ -18,6 +27,8 @@ pub struct RequestLog {
     pub status_code: i32,
     pub request_type: RequestType,
     pub created_at: DateTime<Utc>,
+    pub request_status: RequestStatus,
+    pub failure_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]

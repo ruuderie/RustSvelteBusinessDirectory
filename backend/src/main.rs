@@ -8,22 +8,28 @@ mod handlers;
 mod admin;
 mod models;
 use axum::http::{self,HeaderName, HeaderValue, Method,Request, StatusCode};
-use axum::middleware::{from_fn_with_state, Next};
+use axum::body::Body;
+use axum::middleware::{from_fn_with_state, from_fn, Next};
 use axum::{
+    routing::get,
     extract::State,
     Router,
-    error_handling::HandleErrorLayer,
+    Extension,
 };
-use tower::{ServiceBuilder, BoxError};
-use sea_orm::Database;
+use tower::ServiceBuilder;
+use sea_orm::{Database, DatabaseConnection, ConnectionTrait};
 use sea_orm_migration::MigratorTrait;
 use std::net::SocketAddr;
-use tower_http::cors::{AllowOrigin, CorsLayer};
+use tower_http::cors::{AllowOrigin, CorsLayer, Any};
 use tower_http::trace::TraceLayer;
 use crate::api::create_router;
 use crate::admin::setup::create_admin_user_if_not_exists;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use crate::middleware::request_logger::RequestLogger;
+use crate::middleware::{
+    request_logger::RequestLogger,
+    rate_limiter::RateLimiter,
+    middleware::auth_middleware
+};
 use axum::response::{IntoResponse,Response};
 
 async fn log_request_middleware<B>(
@@ -31,6 +37,7 @@ async fn log_request_middleware<B>(
     request: Request<B>,
     next: Next<B>,
 ) -> Response {
+    tracing::debug!("Logging request");
     match state.log_request(request, next).await {
         Ok(response) => response,
         Err(status_code) => (status_code, "Error logging request").into_response(),
@@ -43,14 +50,14 @@ async fn handle_error(error: Box<dyn std::error::Error + Send + Sync>) -> (http:
 }
 
 fn configure_cors(directory_client: &str, admin_client: &str) -> CorsLayer {
-    let allow_origin = AllowOrigin::list(vec![
+    let allow_origin = vec![
         directory_client.parse::<HeaderValue>().unwrap(),
         admin_client.parse::<HeaderValue>().unwrap(),
-    ]);
+    ];
 
     CorsLayer::new()
         .allow_origin(allow_origin)
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
         .allow_headers(vec![
             HeaderName::from_static("content-type"),
             HeaderName::from_static("authorization"),
@@ -90,7 +97,8 @@ async fn main() {
         .await
         .expect("Failed to run migrations");
     tracing::info!("Migrations completed");
-
+    let table_exists = &db.execute_unprepared("SELECT 1 FROM request_log LIMIT 1").await.is_ok();
+    tracing::info!("request_log table exists: {}", table_exists);
     // Create admin user if flag is set
     if create_admin {
         tracing::info!("Verifying Admin");
@@ -108,17 +116,42 @@ async fn main() {
     tracing::info!("Directory URL: {}", directory_client);
     tracing::info!("Admin URL: {}", admin_client);
 
-    let cors = configure_cors(&directory_client, admin_client);
+    let cors = CorsLayer::new()
+        .allow_origin(vec![
+            directory_client.parse::<HeaderValue>().unwrap(),
+            admin_client.parse::<HeaderValue>().unwrap(),
+        ])
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
+        .allow_headers(vec![
+            http::header::CONTENT_TYPE,
+            http::header::AUTHORIZATION,
+            http::header::ACCEPT,
+        ])
+        .allow_credentials(true);
+
+    let rate_limiter = RateLimiter::new();
 
     let app = Router::new()
-        .merge(create_router(db.clone()))
+        .route("/health", get(|| async { "OK" }))
         .layer(cors)
+        .layer(Extension(rate_limiter))
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
                 .layer(from_fn_with_state(request_logger, log_request_middleware))
                 .into_inner()
-        );
+        )
+        .layer(axum::middleware::from_fn_with_state(
+            db.clone(),
+            |State(db): State<DatabaseConnection>,
+             Extension(rate_limiter): Extension<RateLimiter>,
+             req: Request<Body>,
+             next: Next<Body>| async move {
+                auth_middleware(State(db), Extension(rate_limiter), req, next).await
+            }
+        ))
+        .merge(create_router(db.clone()));
+
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
     tracing::info!("Listening on {}", addr);

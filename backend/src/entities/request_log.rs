@@ -2,7 +2,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
-use crate::models::request_log::RequestType;
+use crate::models::request_log::{RequestType, RequestStatus};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "request_log")]
@@ -18,6 +18,8 @@ pub struct Model {
     pub request_type: RequestType,
     #[sea_orm(column_type = "TimestampWithTimeZone")]
     pub created_at: DateTime<Utc>,
+    pub request_status: RequestStatus,
+    pub failure_reason: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter)]

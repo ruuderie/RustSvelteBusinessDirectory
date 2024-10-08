@@ -1,7 +1,7 @@
 use axum::{
     middleware::Next,
     response::Response,
-    http::{StatusCode, Request},
+    http::{StatusCode, Request, Method},
     Extension,
 };
 use crate::entities::{user, session, user_account, profile, directory};
@@ -13,9 +13,12 @@ use axum::extract::State;
 use crate::handlers::request_logs::log_request;
 use crate::models::request_log::RequestType;
 use http::header;
+use crate::models::request_log::RequestStatus;  // Import RequestStatus
+use crate::middleware::rate_limiter::RateLimiter;
 
 pub async fn auth_middleware<B>(
     State(db): State<DatabaseConnection>,
+    Extension(rate_limiter): Extension<RateLimiter>,
     mut req: Request<B>,
     next: Next<B>,
 ) -> Result<Response, StatusCode> {
@@ -44,10 +47,39 @@ pub async fn auth_middleware<B>(
     let request_type = if path == "/login" { RequestType::Login } else { RequestType::API };
 
     if is_public_route(&path) {
-        tracing::debug!("Public route detected, skipping authentication");
-        let response = next.run(req).await;
-        log_request(method, uri, response.status(), None, &user_agent, &ip_address, request_type, &db).await?;
-        return Ok(response);
+        tracing::debug!("Public route detected, applying rate limiting");
+        match rate_limiter.check_rate_limit(req, next).await {
+            Ok(response) => {
+                log_request(
+                    method,
+                    uri,
+                    response.status(),
+                    None,
+                    &user_agent,
+                    &ip_address,
+                    request_type,
+                    RequestStatus::Success,
+                    None,
+                    &db
+                ).await?;
+                return Ok(response);
+            },
+            Err(status) => {
+                log_request(
+                    method,
+                    uri,
+                    status,
+                    None,
+                    &user_agent,
+                    &ip_address,
+                    request_type,
+                    RequestStatus::Failure,
+                    Some("Rate limit exceeded".to_string()),
+                    &db
+                ).await?;
+                return Err(status);
+            }
+        }
     }
 
     tracing::debug!("Authenticating request");
@@ -116,6 +148,8 @@ pub async fn auth_middleware<B>(
         &user_agent,
         &ip_address,
         request_type,
+        RequestStatus::Success,
+        None,
         &db
     ).await {
         tracing::error!("Failed to log request: {:?}", e);

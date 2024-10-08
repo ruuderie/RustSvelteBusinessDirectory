@@ -3,7 +3,7 @@ use sea_orm::{DatabaseConnection, Set, ActiveModelTrait};
 use uuid::Uuid;
 use chrono::Utc;
 use crate::entities::request_log;
-use crate::models::request_log::RequestType;
+use crate::models::request_log::{RequestStatus, RequestType};
 
 pub async fn log_request(
     method: Method,
@@ -13,6 +13,8 @@ pub async fn log_request(
     user_agent: &str,
     ip_address: &str,
     request_type: RequestType,
+    request_status: RequestStatus,
+    failure_reason: Option<String>,
     db: &DatabaseConnection,
 ) -> Result<(), StatusCode> {
     let log_entry = request_log::ActiveModel {
@@ -24,6 +26,8 @@ pub async fn log_request(
         method: Set(method.to_string()),
         status_code: Set(status.as_u16() as i32),
         request_type: Set(request_type),
+        request_status: Set(request_status),
+        failure_reason: Set(failure_reason),
         created_at: Set(Utc::now()),
     };
 

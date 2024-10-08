@@ -14,12 +14,21 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(RequestLog::Id).uuid().not_null().primary_key())
                     .col(ColumnDef::new(RequestLog::UserId).uuid().null())
                     .col(ColumnDef::new(RequestLog::IpAddress).string().not_null())
-                    .col(ColumnDef::new(RequestLog::UserAgent).string().null())
+                    .col(ColumnDef::new(RequestLog::UserAgent).string())
                     .col(ColumnDef::new(RequestLog::Path).string().not_null())
                     .col(ColumnDef::new(RequestLog::Method).string().not_null())
                     .col(ColumnDef::new(RequestLog::StatusCode).integer().not_null())
                     .col(ColumnDef::new(RequestLog::RequestType).string().not_null())
-                    .col(ColumnDef::new(RequestLog::CreatedAt).timestamp().not_null())
+                    .col(ColumnDef::new(RequestLog::CreatedAt).timestamp_with_time_zone().not_null())
+                    .col(ColumnDef::new(RequestLog::RequestStatus).string().not_null())
+                    .col(ColumnDef::new(RequestLog::FailureReason).string())
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-request_log-user_id")
+                            .from(RequestLog::Table, RequestLog::UserId)
+                            .to(User::Table, User::Id)
+                            .on_delete(ForeignKeyAction::SetNull)
+                    )
                     .to_owned(),
             )
             .await
@@ -44,4 +53,12 @@ enum RequestLog {
     StatusCode,
     RequestType,
     CreatedAt,
+    RequestStatus,
+    FailureReason,
+}
+
+#[derive(Iden)]
+enum User {
+    Table,
+    Id,
 }
