@@ -10,13 +10,30 @@
   import { Switch } from "$lib/components/ui/switch";
   import { ArrowLeft, Users, ListChecks, DollarSign, BarChart2, Download } from 'lucide-svelte';
   import { goto } from '$app/navigation';
+  import { formatDate } from '$lib/utils';
 
+  let userData = null;
   let user = null;
+  let userAccounts = [];
+  let profiles = [];
+  let directories = [];
+  let loginHistory = []; // New variable for login history
   let loading = true;
   let error = null;
   let editing = false;
+  let showDeactivatePrompt = false;
 
   $: userId = $page.params.userId;
+  $: queryParams = $page.url.searchParams;
+
+  onMount(() => {
+    if (queryParams.get('edit') === 'true') {
+      editing = true;
+    }
+    if (queryParams.get('deactivate') === 'true') {
+      showDeactivatePrompt = true;
+    }
+  });
 
   $: if (userId) {
     loadUserData(userId);
@@ -25,18 +42,12 @@
   async function loadUserData(id) {
     loading = true;
     try {
-      user = await api.admin.fetchUserById(id);
-      console.log("User:", user);
-      // Add placeholder data
-      user.name = user.username; // Use username as name
-      user.phone = "123-456-7890"; // Placeholder phone
-      user.lastLogin = new Date().toISOString(); // Placeholder last login
-      user.accounts = [
-        { name: "Main Account", role: "User", status: "Active" }
-      ];
-      user.loginHistory = [
-        { date: new Date().toISOString(), ipAddress: "192.168.1.1", device: "Desktop" }
-      ];
+      const response = await api.admin.fetchUserById(id);
+      console.log("User data:", response);
+      
+      // Destructure the response, providing default values
+      ({ user = null, user_accounts: userAccounts = [], profiles = [], directories = [], login_history: loginHistory = [] } = response);
+      userData = response;  // Keep the full response if needed elsewhere
     } catch (err) {
       error = err.message;
     } finally {
@@ -54,9 +65,18 @@
   }
 
   async function handleToggleActive() {
+    if (user.is_active) {
+      showDeactivatePrompt = true;
+    } else {
+      await toggleUserActive();
+    }
+  }
+
+  async function toggleUserActive() {
     try {
       user.is_active = !user.is_active;
       await api.admin.updateUser(user.id, { is_active: user.is_active });
+      showDeactivatePrompt = false;
     } catch (err) {
       error = err.message;
     }
@@ -73,6 +93,14 @@
 
   function goBack() {
     goto('/users');
+  }
+
+  function cancelDeactivation() {
+    showDeactivatePrompt = false;
+  }
+
+  function formatDateTime(dateString) {
+    return dateString ? formatDate(new Date(dateString), 'yyyy-MM-dd HH:mm:ss') : 'N/A';
   }
 </script>
 
@@ -172,24 +200,84 @@
             <CardTitle>User Accounts</CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Account</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {#each user.accounts as account}
+            {#if userAccounts.length > 0}
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell>{account.name}</TableCell>
-                    <TableCell>{account.role}</TableCell>
-                    <TableCell>{account.status}</TableCell>
+                    <TableHead>Account ID</TableHead>
+                    <TableHead>User ID</TableHead>
                   </TableRow>
-                {/each}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {#each userAccounts as account}
+                    <TableRow>
+                      <TableCell>{account.account_id}</TableCell>
+                      <TableCell>{account.user_id}</TableCell>
+                    </TableRow>
+                  {/each}
+                </TableBody>
+              </Table>
+            {:else}
+              <p>No user accounts found.</p>
+            {/if}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Profiles</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {#if profiles.length > 0}
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Profile ID</TableHead>
+                    <TableHead>Account ID</TableHead>
+                    <TableHead>Directory ID</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {#each profiles as profile}
+                    <TableRow>
+                      <TableCell>{profile.id}</TableCell>
+                      <TableCell>{profile.account_id}</TableCell>
+                      <TableCell>{profile.directory_id}</TableCell>
+                    </TableRow>
+                  {/each}
+                </TableBody>
+              </Table>
+            {:else}
+              <p>No profiles found.</p>
+            {/if}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Directories</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {#if directories.length > 0}
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Directory ID</TableHead>
+                    <TableHead>Name</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {#each directories as directory}
+                    <TableRow>
+                      <TableCell>{directory.id}</TableCell>
+                      <TableCell>{directory.name}</TableCell>
+                    </TableRow>
+                  {/each}
+                </TableBody>
+              </Table>
+            {:else}
+              <p>No directories found.</p>
+            {/if}
           </CardContent>
         </Card>
 
@@ -198,29 +286,48 @@
             <CardTitle>Login History</CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>IP Address</TableHead>
-                  <TableHead>Device</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {#each user.loginHistory as login}
+            {#if loginHistory.length > 0}
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell>{new Date(login.date).toLocaleString()}</TableCell>
-                    <TableCell>{login.ipAddress}</TableCell>
-                    <TableCell>{login.device}</TableCell>
+                    <TableHead>Date</TableHead>
+                    <TableHead>IP Address</TableHead>
                   </TableRow>
-                {/each}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {#each loginHistory as login}
+                    <TableRow>
+                      <TableCell>{formatDateTime(login.created_at)}</TableCell>
+                      <TableCell>{login.ip_address}</TableCell>
+                    </TableRow>
+                  {/each}
+                </TableBody>
+              </Table>
+            {:else}
+              <p>No login history found.</p>
+            {/if}
           </CardContent>
         </Card>
       </div>
     </div>
   {:else}
     <p class="text-center text-xl">User not found.</p>
+  {/if}
+
+  {#if showDeactivatePrompt}
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+      <Card class="w-96">
+        <CardHeader>
+          <CardTitle>Deactivate User</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p>Are you sure you want to deactivate this user?</p>
+        </CardContent>
+        <CardFooter class="flex justify-between">
+          <Button variant="outline" on:click={cancelDeactivation}>Cancel</Button>
+          <Button variant="destructive" on:click={toggleUserActive}>Deactivate</Button>
+        </CardFooter>
+      </Card>
+    </div>
   {/if}
 </div>

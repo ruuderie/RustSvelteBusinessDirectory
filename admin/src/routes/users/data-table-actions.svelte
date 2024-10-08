@@ -12,11 +12,11 @@
     }
 
     function editUser(): void {
-        console.log(`Edit user with ID: ${id}`);
+        goto(`/users/${id}?edit=true`);
     }
 
     function deactivateUser(): void {
-        console.log(`Deactivate user with ID: ${id}`);
+        goto(`/users/${id}?deactivate=true`);
     }
 
     async function copyUserId(): Promise<void> {

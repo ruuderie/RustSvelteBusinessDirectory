@@ -7,13 +7,7 @@ use crate::entities::{
     account::{self, Entity as Account},
 };
 use axum::{
-    extract::{Extension, Json, Path},
-    response::IntoResponse,
-    http::StatusCode,
-    http::header::*,
-    http::Error,
-    routing::{post, get},
-    Router,
+    body::Body, extract::{Extension, Json, Path, State, TypedHeader}, headers::{HeaderMap, UserAgent}, http::{header::USER_AGENT, StatusCode}, response::IntoResponse, routing::{get, post}, Router
 };
 use serde::{Deserialize, Serialize};
 use crate::auth::{hash_password, verify_password, generate_jwt, generate_jwt_admin};
@@ -23,6 +17,7 @@ use crate::handlers::profiles::get_profile_by_id;
 use sea_orm::{DatabaseConnection, EntityTrait, Set, ColumnTrait, QueryFilter, ActiveModelTrait};
 use uuid::Uuid;
 use chrono::{Utc, Duration};
+use crate::handlers::request_logs::log_request;
 
 #[derive(Deserialize)]
 pub struct LoginCredentials {
@@ -35,23 +30,22 @@ pub struct LoginResponse {
     pub token: String,
 }
 
-pub fn auth_routes() -> Router {
+pub fn auth_routes() -> Router<DatabaseConnection> {
     Router::new()
         .route("/login", post(login_user))
         .route("/register", post(register_user))
         .route("/logout", post(logout_user))
         .route("/refresh-token", post(refresh_token))
-        .route("/validate-session", get(validate_session))  // Add this line
+        .route("/validate-session", get(validate_session))
 }
 
-pub fn authenticated_routes() -> Router {
+pub fn authenticated_routes() -> Router<DatabaseConnection> {
     Router::new()
-        // We can add any user-related routes that require authentication
         .route("/profile", get(get_user_profile))
 }
 
 pub async fn get_user_profile(
-    Extension(db): Extension<DatabaseConnection>,
+    State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<profile::Model>, StatusCode> {
@@ -59,7 +53,7 @@ pub async fn get_user_profile(
 }
 
 pub async fn register_user(
-    Extension(db): Extension<DatabaseConnection>,
+    State(db): State<DatabaseConnection>,
     Json(user_data): Json<UserRegistration>,
 ) -> Result<Json<user::Model>, StatusCode> {
     tracing::info!("Received registration request for email: {}", user_data.email);
@@ -96,10 +90,14 @@ pub async fn register_user(
     let new_user = user::ActiveModel {
         id: Set(Uuid::new_v4()),
         username: Set(username.clone()),
+        first_name: Set(user_data.first_name),
+        last_name: Set(user_data.last_name),
+        phone: Set(user_data.phone),
         email: Set(email.clone()),
         password_hash: Set(hashed_password),
         is_admin: Set(false),
         is_active: Set(true),
+        last_login: Set(None),
         created_at: Set(Utc::now()),
         updated_at: Set(Utc::now()),
     };
@@ -169,7 +167,7 @@ pub async fn register_user(
 }
 
 pub async fn login_user(
-    Extension(db): Extension<DatabaseConnection>,
+    State(db): State<DatabaseConnection>,
     Json(credentials): Json<LoginCredentials>,
 ) -> Result<impl IntoResponse, StatusCode> {
     tracing::info!("Attempting to log in user: {}", credentials.email);
@@ -219,7 +217,7 @@ pub async fn login_user(
 }
 
 pub async fn logout_user(
-    Extension(db): Extension<DatabaseConnection>,
+    State(db): State<DatabaseConnection>,
     Extension(session): Extension<crate::entities::session::Model>,
 ) -> Result<impl IntoResponse, StatusCode> {
     if !session.verify_integrity() {

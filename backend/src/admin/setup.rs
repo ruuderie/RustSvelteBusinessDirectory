@@ -20,10 +20,14 @@ pub async fn create_admin_user_if_not_exists(
         let new_admin = user::ActiveModel {
             id: Set(Uuid::new_v4()),
             username: Set("admin".to_string()),
+            first_name: Set(std::env::var("ADMIN_FIRST_NAME").unwrap()),
+            last_name: Set(std::env::var("ADMIN_LAST_NAME").unwrap()),
             email: Set(email.to_string()),
             password_hash: Set(hashed_password),
             is_admin: Set(true),
             is_active: Set(true),
+            phone: Set(std::env::var("ADMIN_PHONE").unwrap()),
+            last_login: Set(None),
             created_at: Set(Utc::now()),
             updated_at: Set(Utc::now()),
         };

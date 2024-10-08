@@ -10,3 +10,4 @@ pub mod directory;
 pub mod listing;
 pub mod listing_attribute;
 pub mod session;
+pub mod request_log;

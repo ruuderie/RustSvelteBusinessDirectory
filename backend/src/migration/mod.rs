@@ -13,6 +13,9 @@ mod m20230919_create_listing_attributes_table;
 mod m20230920_create_ad_purchases_table;
 mod m20240001_update_timestamp_migration;
 mod m20230911_create_sessions_table;
+mod m20230921_add_user_columns;
+mod m20230922_create_request_log_table;
+
 
 pub struct Migrator;
 
@@ -21,6 +24,7 @@ impl MigratorTrait for Migrator {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
         vec![
             Box::new(m20230912_create_users_table::Migration),
+            Box::new(m20230921_add_user_columns::Migration),
             Box::new(m20230911_create_sessions_table::Migration),
             Box::new(m20230911_create_accounts_table::Migration),
             Box::new(m20230912_create_user_accounts_table::Migration),
@@ -33,6 +37,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20230919_create_listing_attributes_table::Migration),
             Box::new(m20230920_create_ad_purchases_table::Migration),
             Box::new(m20240001_update_timestamp_migration::Migration),
+            Box::new(m20230922_create_request_log_table::Migration),
         ]
     }
 }

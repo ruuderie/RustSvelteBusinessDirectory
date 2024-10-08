@@ -29,7 +29,6 @@ use crate::models::{
     listing_attribute::{ListingAttributeModel, CreateListingAttribute, UpdateListingAttribute}
     
 };
-use crate::auth::AuthenticatedUser;
 
 pub async fn get_templates(
     Path(directory_id): Path<Uuid>,

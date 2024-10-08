@@ -11,3 +11,4 @@ pub mod user_accounts;
 pub mod users;
 pub mod admin;
 pub mod sessions;
+pub mod request_logs;

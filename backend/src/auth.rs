@@ -78,34 +78,3 @@ pub fn validate_jwt<T: DeserializeOwned>(token: &str) -> Result<T, jsonwebtoken:
     tracing::debug!("JWT decoded successfully for {:?}", std::any::type_name::<T>());
     Ok(token_data.claims)
 }
-
-pub struct AuthenticatedUser(pub UserModel);
-
-#[async_trait]
-impl<B, S> FromRequest<S, B> for AuthenticatedUser
-where
-    B: Send + 'static,
-    S: Send + Sync,
-{
-    type Rejection = (StatusCode, axum::Json<serde_json::Value>);
-
-    async fn from_request(
-        req: Request<B>,
-        state: &S,
-    ) -> Result<Self, Self::Rejection> {
-        // Example: Extract token and verify
-        // Here you should implement your actual authentication logic
-        // For demonstration, we'll assume the user is always authenticated
-        // and provide a dummy user
-
-        // Attempt to extract the user from extensions
-        if let Some(user) = req.extensions().get::<UserModel>().cloned() {
-            Ok(AuthenticatedUser(user))
-        } else {
-            Err((
-                StatusCode::UNAUTHORIZED,
-                axum::Json(json!({ "error": "Unauthorized" })),
-            ))
-        }
-    }
-}

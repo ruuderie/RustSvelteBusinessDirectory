@@ -8,17 +8,19 @@ use crate::entities::{
 use crate::models::profile::{ProfileSearch, CreateProfileInput, UpdateProfileInput};
 use crate::models::account::{AccountModel, CreateAccountInput, UpdateAccountInput};
 use axum::{
-    extract::{Extension, Json, Path, Query},
+    extract::{Extension, Json, Path, Query,State},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post, put, delete},
     Router,
 };
+use sea_orm::Database;
 use sea_orm::{DatabaseConnection, EntityTrait, Set, Condition, ColumnTrait, QueryFilter, ActiveModelTrait, IntoActiveModel};
 use uuid::Uuid;
 use chrono::Utc;
 
-pub fn routes() -> Router {
+pub fn routes(db_connection: DatabaseConnection) -> Router {
+    
     Router::new()
         .route("/profiles", post(create_profile))
         .route("/profiles", get(get_profiles))
@@ -26,10 +28,11 @@ pub fn routes() -> Router {
         .route("/profiles/:id", put(update_profile))
         .route("/profiles/:id", delete(delete_profile))
         .route("/profiles/search", get(search_profiles))
+        .with_state(db_connection)
 }
 
 pub async fn create_profile(
-    Extension(db): Extension<DatabaseConnection>,
+    State(db): State<DatabaseConnection>,
     Extension(current_user): Extension<user::Model>,
     Json(input): Json<CreateProfileInput>,
 ) -> Result<impl IntoResponse, StatusCode> {

@@ -7,9 +7,10 @@ mod middleware;
 mod handlers;
 mod admin;
 mod models;
-use axum::http::{self,HeaderName, HeaderValue, Method, StatusCode};
-use axum::middleware::{from_fn_with_state, from_fn};
+use axum::http::{self,HeaderName, HeaderValue, Method,Request, StatusCode};
+use axum::middleware::{from_fn_with_state, Next};
 use axum::{
+    extract::State,
     Router,
     error_handling::HandleErrorLayer,
 };
@@ -17,19 +18,30 @@ use tower::{ServiceBuilder, BoxError};
 use sea_orm::Database;
 use sea_orm_migration::MigratorTrait;
 use std::net::SocketAddr;
-use std::convert::Infallible;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 use crate::api::create_router;
 use crate::admin::setup::create_admin_user_if_not_exists;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use crate::middleware::request_logger::RequestLogger;
+use axum::response::{IntoResponse,Response};
+
+async fn log_request_middleware<B>(
+    State(state): State<RequestLogger>,
+    request: Request<B>,
+    next: Next<B>,
+) -> Response {
+    match state.log_request(request, next).await {
+        Ok(response) => response,
+        Err(status_code) => (status_code, "Error logging request").into_response(),
+    }
+}
 
 async fn handle_error(error: Box<dyn std::error::Error + Send + Sync>) -> (http::StatusCode, String) {
     tracing::error!("Unhandled error: {:?}", error);
     (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error".to_string())
 }
 
-// Add this new function
 fn configure_cors(directory_client: &str, admin_client: &str) -> CorsLayer {
     let allow_origin = AllowOrigin::list(vec![
         directory_client.parse::<HeaderValue>().unwrap(),
@@ -55,7 +67,7 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // Rest of your main function
+    
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let admin_email = std::env::var("ADMIN_USER").expect("ADMIN_USER must be set");
     let admin_password = std::env::var("ADMIN_PASSWORD").expect("ADMIN_PASSWORD must be set");
@@ -70,6 +82,8 @@ async fn main() {
     let db = Database::connect(&database_url)
         .await
         .expect("Failed to connect to the database");
+
+    let request_logger = RequestLogger::new(db.clone());
 
     // Run migrations
     migration::Migrator::up(&db, None)
@@ -97,13 +111,14 @@ async fn main() {
     let cors = configure_cors(&directory_client, admin_client);
 
     let app = Router::new()
-    .merge(create_router(db.clone()))
-    .layer(cors)
-    .layer(
-        ServiceBuilder::new()
-            .layer(TraceLayer::new_for_http())
-            .into_inner()
-    );
+        .merge(create_router(db.clone()))
+        .layer(cors)
+        .layer(
+            ServiceBuilder::new()
+                .layer(TraceLayer::new_for_http())
+                .layer(from_fn_with_state(request_logger, log_request_middleware))
+                .into_inner()
+        );
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
     tracing::info!("Listening on {}", addr);

@@ -1,4 +1,8 @@
-use crate::entities::{user, directory, listing, ad_purchase, profile, account, session,template, category, directory_type, listing_attribute};
+use crate::entities::{
+    user,user_account, directory, listing, ad_purchase, 
+    profile, account, session,request_log,
+    template, category, directory_type, listing_attribute
+};
 use axum::{
     extract::{Extension, Json, Path, State, Query},
     http::StatusCode,
@@ -8,6 +12,7 @@ use sea_orm::{DatabaseConnection, EntityTrait,QuerySelect, QueryFilter,Order, Co
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use crate::models::listing::ListingStatus;
+use crate::models::user::UserAdminView;
 use crate::models::ad_purchase::AdStatus;
 use crate::models::directory_type::{DirectoryTypeModel, CreateDirectoryType, UpdateDirectoryType};
 use std::collections::HashMap;
@@ -164,7 +169,7 @@ pub async fn list_users(
     Extension(current_user): Extension<user::Model>,
     Extension(current_session): Extension<session::Model>,
 ) -> Result<impl IntoResponse, StatusCode> {
-
+    tracing::info!("Listing users via admin route");
     let users = user::Entity::find()
         .all(&db)
         .await
@@ -179,14 +184,51 @@ pub async fn get_user(
     Extension(current_session): Extension<session::Model>,
     Path(user_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-
+    tracing::info!("Getting user via admin route");
     let user = user::Entity::find_by_id(user_id)
         .one(&db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
+    
+    let mut user_admin_view = UserAdminView{
+        user: user.clone(),
+        user_accounts: Vec::new(),
+        profiles: Vec::new(),
+        directories: Vec::new(),
+        login_history: Vec::new(),
+    };
+    
+    let user_accounts = user_account::Entity::find()
+        .filter(user_account::Column::UserId.eq(user_id))
+        .all(&db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    user_admin_view.user_accounts = user_accounts.clone();
+    user_admin_view.user = user.clone();
+    let user_accounts_ids: Vec<Uuid> = user_accounts.iter().map(|user_account| user_account.account_id).collect();
+    let profiles = profile::Entity::find()
+        .filter(profile::Column::AccountId.is_in(user_accounts_ids.clone()))
+        .all(&db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    user_admin_view.profiles = profiles.clone();
+    let directories = directory::Entity::find()
+        .filter(directory::Column::Id.is_in(profiles.into_iter().map(|profile| profile.directory_id)))
+        .all(&db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    //filter by request type of LOGIN
+    let login_history = request_log::Entity::find()
+        .filter(request_log::Column::UserId.eq(user.id))
+        .filter(request_log::Column::RequestType.eq("LOGIN".to_string()))
+        .all(&db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    user_admin_view.directories = directories;
+    user_admin_view.login_history = login_history;
 
-    Ok(Json(user))
+    Ok(Json(user_admin_view))
 }
 
 

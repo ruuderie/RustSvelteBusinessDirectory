@@ -9,7 +9,12 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
     pub username: String,
+    pub first_name: String,
+    pub last_name: String,
     pub email: String,
+    pub phone: String,
+    #[sea_orm(column_type = "TimestampWithTimeZone")]
+    pub last_login: Option<DateTime<Utc>>,
     pub password_hash: String,
     pub is_admin: bool,
     pub is_active: bool,
@@ -23,6 +28,7 @@ pub struct Model {
 pub enum Relation {
     UserAccount,
     Session,
+    RequestLog, // Add this line
 }
 
 impl RelationTrait for Relation {
@@ -30,6 +36,7 @@ impl RelationTrait for Relation {
         match self {
             Self::UserAccount => Entity::has_many(super::user_account::Entity).into(),
             Self::Session => Entity::has_many(super::session::Entity).into(),
+            Self::RequestLog => Entity::has_many(super::request_log::Entity).into(), // Add this line
         }
     }
 }
@@ -47,6 +54,12 @@ impl Related<super::account::Entity> for Entity {
 impl Related<super::session::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Session.def()
+    }
+}
+
+impl Related<super::request_log::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::RequestLog.def()
     }
 }
 
