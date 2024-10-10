@@ -27,7 +27,7 @@ pub struct Model {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
-#[sea_orm(rs_type = "String", db_type = "String(Some(20))")]
+#[sea_orm(rs_type = "String", db_type = "String(StringLen::N(50))")]
 pub enum ProfileType {
     #[sea_orm(string_value = "Individual")]
     Individual,

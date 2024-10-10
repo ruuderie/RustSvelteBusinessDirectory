@@ -45,6 +45,8 @@ pub async fn auth_middleware<B>(
     };
 
     let request_type = if path == "/login" { RequestType::Login } else { RequestType::API };
+    tracing::debug!("Request type: {:?}", request_type);
+    tracing::info!("Path for request: {:?}", &path);
 
     if is_public_route(&path) {
         tracing::debug!("Public route detected, applying rate limiting");
@@ -159,7 +161,7 @@ pub async fn auth_middleware<B>(
 }
 
 fn is_public_route(path: &str) -> bool {
-    let public_routes = vec!["/login", "/register", "/refresh-token", "/api/listings", "/api/listing/"];
+    let public_routes = vec!["/login", "/register","/validate-session", "/refresh-token", "/api/listings", "/api/listing/", "/api/health"];
     public_routes.iter().any(|route| path.starts_with(route))
 }
 

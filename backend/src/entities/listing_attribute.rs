@@ -25,7 +25,7 @@ pub struct Model {
 }
 
 #[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize, EnumString)]
-#[sea_orm(rs_type = "String", db_type = "String(Some(50))")]
+#[sea_orm(rs_type = "String", db_type = "String(StringLen::N(32))")]
 pub enum AttributeType {
     #[sea_orm(string_value = "ServiceDetail")]
     ServiceDetail,
@@ -52,7 +52,7 @@ pub enum AttributeType {
 }
 
 #[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize, EnumString)]
-#[sea_orm(rs_type = "String", db_type = "String(Some(50))")]
+#[sea_orm(rs_type = "String", db_type = "String(StringLen::N(50))")]
 pub enum AttributeKey {
     // Service-related keys
     #[sea_orm(string_value = "Specialization")]

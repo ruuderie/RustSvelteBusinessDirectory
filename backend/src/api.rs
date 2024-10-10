@@ -1,6 +1,6 @@
 use axum::{Router, Extension};
 use sea_orm::DatabaseConnection;
-use crate::handlers::{users, profiles, listings, accounts, user_accounts, ad_purchases, directories};
+use crate::handlers::{users,admin, profiles, listings, accounts, user_accounts, ad_purchases, directories};
 use crate::middleware::{auth_middleware};
 use crate::admin::routes::admin_routes;
 use tower_http::trace::TraceLayer;
@@ -9,9 +9,10 @@ pub fn create_router(db: DatabaseConnection) -> Router {
     // Auth routes (login and register)
     let auth_routes = users::auth_routes();
     tracing::info!("Auth routes set up");
+    //add / health to public routes
 
-    // Public routes
     let public_routes = Router::new()
+        .merge(admin::public_routes())
         .merge(directories::public_routes())
         .merge(listings::public_routes())
         .with_state(());

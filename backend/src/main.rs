@@ -16,11 +16,12 @@ use axum::{
     Router,
     Extension,
 };
+use tower_http::cors::CorsLayer;
 use tower::ServiceBuilder;
-use sea_orm::{Database, DatabaseConnection, ConnectionTrait};
-use sea_orm_migration::MigratorTrait;
+use crate::sea_orm::{Database, DatabaseConnection, ConnectionTrait};
+use sea_orm_migration::prelude::*;
+use migration::{Migrator};
 use std::net::SocketAddr;
-use tower_http::cors::{AllowOrigin, CorsLayer, Any};
 use tower_http::trace::TraceLayer;
 use crate::api::create_router;
 use crate::admin::setup::create_admin_user_if_not_exists;
@@ -86,24 +87,23 @@ async fn main() {
     tracing::info!("Database URL: {}", database_url);
 
     // Connect to the database
-    let db = Database::connect(&database_url)
+    let conn = Database::connect(&database_url)
         .await
         .expect("Failed to connect to the database");
 
-    let request_logger = RequestLogger::new(db.clone());
+    let request_logger = RequestLogger::new(conn.clone());
 
     // Run migrations
-    migration::Migrator::up(&db, None)
-        .await
-        .expect("Failed to run migrations");
+    Migrator::up(&conn, None).await.unwrap();
+
     tracing::info!("Migrations completed");
-    let table_exists = &db.execute_unprepared("SELECT 1 FROM request_log LIMIT 1").await.is_ok();
+    let table_exists = &conn.execute_unprepared("SELECT 1 FROM request_log LIMIT 1").await.is_ok();
     tracing::info!("request_log table exists: {}", table_exists);
     // Create admin user if flag is set
     if create_admin {
         tracing::info!("Verifying Admin");
         println!("Verifying Admin");
-        match create_admin_user_if_not_exists(&db, &admin_email, &admin_password).await {
+        match create_admin_user_if_not_exists(&conn, &admin_email, &admin_password).await {
             Ok(_) => tracing::info!("Admin user setup completed"),
             Err(e) => tracing::error!("Failed to set up admin user: {:?}", e),
         }
@@ -116,42 +116,29 @@ async fn main() {
     tracing::info!("Directory URL: {}", directory_client);
     tracing::info!("Admin URL: {}", admin_client);
 
-    let cors = CorsLayer::new()
-        .allow_origin(vec![
-            directory_client.parse::<HeaderValue>().unwrap(),
-            admin_client.parse::<HeaderValue>().unwrap(),
-        ])
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
-        .allow_headers(vec![
-            http::header::CONTENT_TYPE,
-            http::header::AUTHORIZATION,
-            http::header::ACCEPT,
-        ])
-        .allow_credentials(true);
+    let cors = configure_cors(&directory_client, admin_client);
 
     let rate_limiter = RateLimiter::new();
 
     let app = Router::new()
-        .route("/health", get(|| async { "OK" }))
+        .merge(create_router(conn.clone()))
         .layer(cors)
-        .layer(Extension(rate_limiter))
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
                 .layer(from_fn_with_state(request_logger, log_request_middleware))
                 .into_inner()
         )
-        .layer(axum::middleware::from_fn_with_state(
-            db.clone(),
-            |State(db): State<DatabaseConnection>,
-             Extension(rate_limiter): Extension<RateLimiter>,
-             req: Request<Body>,
+        .layer(axum::middleware::from_fn(
+            |req: Request<Body>,
              next: Next<Body>| async move {
+                let db = req.extensions().get::<DatabaseConnection>().cloned().unwrap();
+                let rate_limiter = req.extensions().get::<RateLimiter>().cloned().unwrap();
                 auth_middleware(State(db), Extension(rate_limiter), req, next).await
             }
         ))
-        .merge(create_router(db.clone()));
-
+        .layer(Extension(conn.clone()))
+        .layer(Extension(rate_limiter));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
     tracing::info!("Listening on {}", addr);

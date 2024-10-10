@@ -25,7 +25,7 @@ pub struct Model {
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
     pub additional_info: Value,
-    #[sea_orm(column_type = "String(Some(32))")]
+    #[sea_orm(column_type = "String(StringLen::N(32))")]
     pub status: ListingStatus,
     pub is_featured: bool,
     pub is_based_on_template: bool,

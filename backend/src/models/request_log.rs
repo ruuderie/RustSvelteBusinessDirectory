@@ -8,7 +8,7 @@ use crate::entities::listing;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
-#[sea_orm(rs_type = "String", db_type = "String(Some(32))")]
+#[sea_orm(rs_type = "String", db_type = "String(StringLen::N(32))")]
 pub enum RequestStatus {
     #[sea_orm(string_value = "success")]
     Success,
@@ -32,7 +32,7 @@ pub struct RequestLog {
 }
 
 #[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
-#[sea_orm(rs_type = "String", db_type = "String(Some(32))")]
+#[sea_orm(rs_type = "String", db_type = "String(StringLen::N(32))")]
 pub enum RequestType {
     #[sea_orm(string_value = "login")]
     Login,

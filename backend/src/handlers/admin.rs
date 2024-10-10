@@ -4,7 +4,9 @@ use crate::entities::{
     template, category, directory_type, listing_attribute
 };
 use axum::{
+    Router,
     extract::{Extension, Json, Path, State, Query},
+    routing::get,
     http::StatusCode,
     response::IntoResponse,
 };
@@ -65,6 +67,11 @@ pub struct ActivityReport {
     recent_profiles: Vec<profile::Model>,
     recent_users: Vec<user::Model>,
     recent_accounts: Vec<account::Model>,
+}
+
+pub fn public_routes() -> Router {
+    Router::new()
+        .route("/health", get(|| async { "OK" }))
 }
 
 pub async fn get_directories(

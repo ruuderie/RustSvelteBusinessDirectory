@@ -3,6 +3,7 @@ use uuid::Uuid;
 use sea_orm::DeriveActiveEnum;
 use serde::{Serialize, Deserialize};
 use sea_orm::prelude::*;
+use strum_macros::Display;
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct AdPurchase {
@@ -38,7 +39,7 @@ pub struct AdPurchaseUpdate {
     pub status: AdStatus,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, DeriveActiveEnum, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, PartialEq, Eq, DeriveActiveEnum, Serialize, Deserialize,Display, EnumIter)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "ad_status")]
 pub enum AdStatus {
     #[sea_orm(string_value = "pending")]    

@@ -25,7 +25,7 @@ pub struct ListingModel {
 }
 
 #[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
-#[sea_orm(rs_type = "String", db_type = "String(Some(32))")]
+#[sea_orm(rs_type = "String", db_type = "String(StringLen::N(32))")]
 pub enum ListingStatus {
     #[sea_orm(string_value = "pending")]
     Pending,
