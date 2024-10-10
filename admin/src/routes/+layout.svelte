@@ -1,54 +1,37 @@
 <script>
-  import Header from '$lib/components/Header.svelte';
   import '../app.css';
   import { ModeWatcher } from "mode-watcher";
-  import { isAuthenticated } from '$lib/stores/authStore'
-  import { checkAuth, logout } from '$lib/auth';
-  import { page } from '$app/stores';
-  import { onMount, afterUpdate } from 'svelte';
-  import { browser } from '$app/environment';
   import { theme } from '$lib/stores/appStore';
+  import { browser } from '$app/environment';
+  import { isAuthenticated } from '$lib/stores/authStore';
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
+  import { checkAuth } from '$lib/auth';
+  import { onMount } from 'svelte';
+  import Header from '$lib/components/Header.svelte';
 
   let isLoading = true;
 
   onMount(async () => {
     if (browser) {
+      console.log('Initializing app');
       await initializeApp();
     }
   });
 
   async function initializeApp() {
-    await checkAuth();
-    
-    const storedTheme = localStorage.getItem('theme');
-    if (storedTheme) {
-      theme.setTheme(storedTheme);
-    } else {
-      const darkMode = localStorage.getItem('darkMode') === 'true';
-      theme.setTheme(darkMode ? 'dark' : 'light');
-    }
-
-    isLoading = false;
-  }
-
-  $: if (browser && !isLoading) {
-    handleRouteChange($page.url.pathname);
-  }
-
-  async function handleRouteChange(newPath) {
     const isAuth = await checkAuth();
-    console.log('checkAuth', isAuth);
+    isAuthenticated.set(isAuth);
+    isLoading = false;
 
-    const publicRoutes = ['/', '/login'];
-
-    if (!isAuth && !publicRoutes.includes(newPath)) {
-      console.log('Redirecting to login');
-      goto('/login', { replaceState: true });
-    } else if (isAuth && newPath === '/login') {
-      console.log('Redirecting to home');
-      goto('/', { replaceState: true });
+    // Redirect based on authentication status
+    if (isAuth && $page.url.pathname === '/') {
+      goto('/home');
+    } else if (!isAuth && $page.url.pathname !== '/login' && $page.url.pathname !== '/register' || $page.url.pathname == '/(authenticated)') {
+      goto('/');
     }
+
+    
   }
 
   // Subscribe to theme changes
@@ -56,6 +39,20 @@
     theme.subscribe(currentTheme => {
       document.documentElement.classList.toggle('dark', currentTheme === 'dark');
     });
+  }
+
+  // Watch for route changes
+  $: if (browser && !isLoading) {
+    handleRouteChange($page.url.pathname);
+  }
+
+  async function handleRouteChange(path) {
+    const isAuth = await checkAuth();
+    if (!isAuth && path !== '/login' && path !== '/register' && path !== '/') {
+      goto('/');
+    } else if (isAuth && path === '/') {
+      goto('/home');
+    }
   }
 </script>
 

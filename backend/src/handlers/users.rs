@@ -12,6 +12,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use crate::auth::{hash_password, verify_password, generate_jwt, generate_jwt_admin};
 use crate::models::user::{UserLogin, UserRegistration};
+use crate::models::session::UserInfo;
 use crate::handlers::sessions::{create_session, refresh_token, validate_session};
 use crate::handlers::profiles::get_profile_by_id;
 use sea_orm::{DatabaseConnection, EntityTrait, Set, ColumnTrait, QueryFilter, ActiveModelTrait};
@@ -205,8 +206,15 @@ pub async fn login_user(
         email: credentials.email.clone(),
         password: credentials.password.clone(),
     })).await {
-        Ok(session_response) => {
+        Ok(mut session_response) => {
             tracing::info!("Session created from user handler successfully for user: {}", user.id);
+            session_response.user = Some(UserInfo {
+                id: user.id,
+                email: user.email,
+                first_name: user.first_name,
+                last_name: user.last_name,
+                is_admin: user.is_admin,
+            });
             Ok(Json(session_response))
         },
         Err(e) => {

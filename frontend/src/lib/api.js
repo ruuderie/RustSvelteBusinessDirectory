@@ -83,8 +83,10 @@ export async function loginUser(credentials) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
     },
     body: JSON.stringify(credentials),
+    credentials: 'include',
   });
   if (!response.ok) {
     const error = new Error('Failed to login');

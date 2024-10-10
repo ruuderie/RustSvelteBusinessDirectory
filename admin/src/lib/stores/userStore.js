@@ -1,4 +1,6 @@
 import { writable, derived } from 'svelte/store';
+import { api } from '$lib/api';
+
 
 export const users = writable([]);
 export const loading = writable(true);
@@ -36,4 +38,24 @@ export function previousPage() {
 export function setUsers(newUsers) {
     users.set(newUsers);
     pagination.update(state => ({ ...state, totalItems: newUsers.length }));
+}
+
+export const user = writable(null);
+
+export async function loadUser() {
+    try {
+        const userData = await api.user.getProfile();
+        user.set(userData);
+    } catch (error) {
+        console.error('Failed to load user data:', error);
+        user.set(null);
+    }
+}
+
+export function setUser(userData) {
+    user.set(userData);
+}
+
+export function clearUser() {
+    user.set(null);
 }

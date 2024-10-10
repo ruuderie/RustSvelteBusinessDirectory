@@ -22,6 +22,11 @@ pub async fn auth_middleware<B>(
     mut req: Request<B>,
     next: Next<B>,
 ) -> Result<Response, StatusCode> {
+    // Allow OPTIONS requests to pass through without authentication
+    if req.method() == Method::OPTIONS {
+        return Ok(next.run(req).await);
+    }
+
     let path = req.uri().path().to_owned();
     let method = req.method().clone();
     let uri = req.uri().clone();

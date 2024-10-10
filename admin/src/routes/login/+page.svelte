@@ -10,9 +10,15 @@
     console.log("onMount called on login page");
     checkAuth();
     if ($isAuthenticated) {
-      goto('/');
+      goto('/home');
     }
   });
+
+  async function handleLogin() {
+    if (loginSuccessful) {
+      goto('/home');
+    }
+  }
 </script>
 
 

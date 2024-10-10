@@ -1,6 +1,8 @@
 import { get } from 'svelte/store';
 import { effectiveDirectoryId, isProduction } from './stores/directoryStore';
 import { env } from './stores/authStore';
+import { login, logout } from './auth';
+import { setUser, clearUser } from './stores/userStore';
 
 let BASE_URL;
 if (import.meta.env.BASE_URL && import.meta.env.BASE_URL !== '/') {
@@ -22,7 +24,7 @@ async function refreshToken() {
     if (!response.ok) {
       console.error("Failed to refresh token. Status:", response.status);
       return { success: false, error: `Failed to refresh token. Status: ${response.status}` };
-    } else{
+    } else {
       console.log("Token refreshed successfully");
     }
 
@@ -30,9 +32,10 @@ async function refreshToken() {
     console.log('Refresh token response data:', data);
 
     localStorage.setItem('authToken', data.token);
-    console.log('New auth token set in localStorage');
+    localStorage.setItem('refreshToken', data.refresh_token);
+    console.log('New auth token and refresh token set in localStorage');
 
-    return { success: true, token: data.token };
+    return { success: true, token: data.token, refreshToken: data.refresh_token };
   } catch (error) {
     console.error('Error in refreshToken:', error);
     return { success: false, error: error.message };
@@ -108,13 +111,20 @@ async function verifySession() {
 }
 
 const userApi = {
-  login: (credentials) => {
+  login: async (credentials) => {
     console.log("Attempting to log in user:", credentials.email);
-    return apiCall('/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(credentials),
-    }, true);
+    try {
+      const response = await apiCall('/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials),
+      }, true);
+      login(response.token, response.refresh_token, response.user); // Pass user data here
+      return response;
+    } catch (error) {
+      console.error('Login failed:', error);
+      throw error;
+    }
   },
   register: (userData) => {
     console.log("Registering user");
@@ -124,13 +134,25 @@ const userApi = {
       body: JSON.stringify(userData),
     }, true);
   },
-  logout: () => apiCall('/logout', { method: 'POST' }),
+  logout: async () => {
+    try {
+      await apiCall('/logout', { method: 'POST' });
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('refreshToken');
+      clearUser();
+      isAuthenticated.set(false);
+    } catch (error) {
+      console.error('Logout failed:', error);
+      throw error;
+    }
+  },
   getProfile: () => apiCall('/users/profile'),
   updateProfile: (profileData) => apiCall('/users/profile', { 
     method: 'PUT', 
     body: JSON.stringify(profileData) 
   }),
   verifySession: verifySession,
+  refreshToken: refreshToken,
 };
 
 const listingApi = {

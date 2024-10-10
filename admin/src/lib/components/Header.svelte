@@ -1,5 +1,6 @@
 <script>
   import { isAuthenticated } from '$lib/stores/authStore';
+  import { user } from '$lib/stores/userStore';
   import { Button } from "$lib/components/ui/button";
   import { Avatar, AvatarFallback, AvatarImage } from "$lib/components/ui/avatar";
   import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '$lib/components/ui/dropdown-menu';
@@ -8,10 +9,12 @@
   import { logout } from '$lib/auth';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-
   let darkMode;
+  $: userName = $user ? `${$user.first_name} ${$user.last_name}` : 'User';
+  $: userInitials = $user ? `${$user.first_name[0]}${$user.last_name[0]}` : 'U';
 
   onMount(() => {
+    console.log('user', $user);
     darkMode = localStorage.getItem('darkMode') === 'true';
     document.documentElement.classList.toggle('dark', darkMode);
   });
@@ -51,15 +54,16 @@
         <DropdownMenu>
           <DropdownMenuTrigger>
             <Avatar class="w-8 h-8 transition duration-300 ease-in-out transform hover:scale-105">
-              <!-- <AvatarImage src="/path-to-user-image.jpg" alt="User" /> -->
-              <AvatarFallback class="bg-muted text-muted-foreground">CN</AvatarFallback>
+              <AvatarFallback class="bg-muted text-muted-foreground">
+                {userInitials}
+              </AvatarFallback>
             </Avatar>
           </DropdownMenuTrigger>
           <DropdownMenuContent class="w-56">
             <DropdownMenuLabel class="font-normal">
               <div class="flex flex-col space-y-1">
-                <p class="text-sm font-medium leading-none">Charlie North</p>
-                <p class="text-xs leading-none text-muted-foreground">charlie@example.com</p>
+                <p class="text-sm font-medium leading-none">{userName}</p>
+                <p class="text-xs leading-none text-muted-foreground">{$user ? $user.email : 'unknown@error'}</p>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />

@@ -16,7 +16,7 @@
     export { className as class };
 
     const navItems = [
-      { href: "/", label: "Dashboard", icon: homeIcon },
+      { href: "/home", label: "Dashboard", icon: homeIcon },
       { href: "/users", label: "Users", icon: userIcon },
       { href: "/directories", label: "Directories", icon: folderIcon },
       { href: "/listings", label: "Listings", icon: announcementIcon },

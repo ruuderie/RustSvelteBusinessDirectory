@@ -2,6 +2,8 @@ import { writable } from 'svelte/store';
 import { browser } from '$app/environment';
 import { isAuthenticated } from './stores/authStore';
 import { api } from './api';
+import { setUser } from './stores/userStore';
+import { loadUser } from './stores/userStore';
 
 export async function checkAuth() {
   if (browser) {
@@ -41,19 +43,21 @@ export async function checkAuth() {
   return false;
 }
 
-export function login(token) {
+export async function login(token, refreshToken, userData) {
   if (browser) {
     localStorage.setItem('authToken', token);
+    localStorage.setItem('refreshToken', refreshToken);
     isAuthenticated.set(true);
+    setUser(userData);  // This now includes first_name and last_name
+    await loadUser();  // Load user data after successful login
   }
 }
 
 export function logout() {
   if (browser) {
     localStorage.removeItem('authToken');
+    localStorage.removeItem('refreshToken');
     isAuthenticated.set(false);
-    // Clear any other user-related data from stores if needed
-    // For example: userStore.set(null);
   }
 }
 /*
