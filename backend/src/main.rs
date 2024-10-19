@@ -39,8 +39,8 @@ async fn log_request_middleware<B>(
     next: Next<B>,
 ) -> Response {
     tracing::debug!("Logging request");
-    match state.log_request(request, next).await {
-        Ok(response) => response,
+    match state.log_request(&request).await {
+        Ok(_) => next.run(request).await,
         Err(status_code) => (status_code, "Error logging request").into_response(),
     }
 }

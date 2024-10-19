@@ -1,9 +1,10 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use axum::http::{Request, StatusCode};
-use axum::middleware::Next;
 use axum::response::Response;
 use dashmap::DashMap;
+use axum::extract::FromRequest;
+use axum::body::{Body, boxed};
 
 const MAX_REQUESTS: u32 = 100;
 const WINDOW_SIZE: Duration = Duration::from_secs(60);
@@ -21,7 +22,10 @@ impl RateLimiter {
         }
     }
 
-    pub async fn check_rate_limit<B>(&self, req: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
+    pub async fn check_rate_limit<B>(&self, req: &Request<B>) -> Result<(), StatusCode> 
+    where
+        B: axum::body::HttpBody + Send + 'static,
+    {
         let ip = req
             .headers()
             .get("x-forwarded-for")
@@ -50,6 +54,6 @@ impl RateLimiter {
             return Err(StatusCode::TOO_MANY_REQUESTS);
         }
 
-        Ok(next.run(req).await)
+        Ok(())
     }
 }

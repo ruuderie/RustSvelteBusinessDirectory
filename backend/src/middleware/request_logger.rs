@@ -1,6 +1,6 @@
 use axum::{
     body::Body,
-    http::{Method, Request, StatusCode},
+    http::{Method, Request, StatusCode, Uri},
     response::Response,
     middleware::Next,
 };
@@ -24,16 +24,18 @@ impl RequestLogger {
 
     pub async fn log_request<B>(
         &self,
-        req: Request<B>,
-        next: Next<B>,
-    ) -> Result<Response, StatusCode> {
+        req: &Request<B>,
+    ) -> Result<(), StatusCode> {
         let method = req.method().clone();
-        
-       /* // Skip logging for OPTIONS requests
-        if method == Method::OPTIONS {
-            return Ok(next.run(req).await);
+        tracing::debug!("method in log request function: {:?}", method);
+        tracing::debug!("uri in log request function: {:?}", req.uri().path());
+
+        if req.uri().path() == "/validate-session" {
+            tracing::debug!("nerrrr");
+            return Ok(());
+        } else {
+            tracing::debug!("yerrrr");
         }
-        */
 
         let request_id = Uuid::new_v4();
         let uri = req.uri().clone();
@@ -58,9 +60,22 @@ impl RequestLogger {
 
         tracing::info!("Request received: ID: {}, Method: {}, URI: {}, User ID: {:?}, IP: {}, Type: {:?}",
             request_id, method, uri, user_id, ip_address, request_type);
+        
+        // We'll log the request status and failure reason in a separate function call after the response is generated
 
-        let response = next.run(req).await;
+        Ok(())
+    }
 
+    pub async fn log_response(
+        &self,
+        response: &Response,
+        method: Method,
+        uri: Uri,
+        user_id: Option<Uuid>,
+        user_agent: &str,
+        ip_address: &str,
+        request_type: RequestType,
+    ) -> Result<(), StatusCode> {
         let status = response.status();
         let request_status = if status.is_success() {
             RequestStatus::Success
@@ -78,16 +93,17 @@ impl RequestLogger {
             uri,
             status,
             user_id,
-            &user_agent,
-            &ip_address,
+            user_agent,
+            ip_address,
             request_type,
             request_status,
             failure_reason,
             &self.db
         ).await {
-            tracing::error!("Failed to log request {}: {:?}", request_id, e);
+            tracing::error!("Failed to log request: {:?}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
 
-        Ok(response)
+        Ok(())
     }
 }
