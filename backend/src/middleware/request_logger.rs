@@ -60,7 +60,10 @@ impl RequestLogger {
 
         tracing::info!("Request received: ID: {}, Method: {}, URI: {}, User ID: {:?}, IP: {}, Type: {:?}",
             request_id, method, uri, user_id, ip_address, request_type);
-        
+        if let Err(e) = log_request(method, uri, StatusCode::OK, user_id, &user_agent, &ip_address, request_type, RequestStatus::Success, None, &self.db).await {
+            eprintln!("Failed to log request: {}", e);
+        }
+
         // We'll log the request status and failure reason in a separate function call after the response is generated
 
         Ok(())

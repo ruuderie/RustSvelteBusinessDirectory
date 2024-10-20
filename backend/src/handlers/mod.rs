@@ -1,3 +1,11 @@
+//CRM
+pub mod cases;
+pub mod activities;
+pub mod deals;
+pub mod leads;
+pub mod customers;
+
+//Admin
 pub mod ad_purchases;
 pub mod accounts;
 pub mod categories;
