@@ -15,12 +15,15 @@ export async function checkAuth() {
         // Verify the token and get user session info
         const sessionInfo = await api.user.verifySession();
         if (sessionInfo.isValid) {
+          console.log("Session is valid, setting isAuthenticated to true");
           isAuthenticated.set(true);
           return true;
         } else {
           // Token is invalid or expired, try to refresh
+          console.log("Session is invalid, attempting to refresh token");
           const refreshResult = await api.user.refreshToken();
           if (refreshResult.success) {
+            console.log("Token refreshed successfully, setting isAuthenticated to true");
             isAuthenticated.set(true);
             return true;
           } else {
@@ -35,7 +38,7 @@ export async function checkAuth() {
         return false;
       }
     } else {
-      console.log("No token found, setting auth to false");
+      console.log("No token found, setting isAuthenticated to false");
       isAuthenticated.set(false);
       return false;
     }
@@ -47,9 +50,10 @@ export async function login(token, refreshToken, userData) {
   if (browser) {
     localStorage.setItem('authToken', token);
     localStorage.setItem('refreshToken', refreshToken);
+    localStorage.setItem('userData', JSON.stringify(userData));
     isAuthenticated.set(true);
-    setUser(userData);  // This now includes first_name and last_name
-    await loadUser();  // Load user data after successful login
+    console.log('Setting user data in login function:', userData);
+    setUser(userData);
   }
 }
 
@@ -57,7 +61,9 @@ export function logout() {
   if (browser) {
     localStorage.removeItem('authToken');
     localStorage.removeItem('refreshToken');
+    localStorage.removeItem('userData');
     isAuthenticated.set(false);
+    setUser(null);
   }
 }
 /*

@@ -1,6 +1,7 @@
 import { get } from 'svelte/store';
 import { effectiveDirectoryId, isProduction } from './stores/directoryStore';
 import { env } from './stores/authStore';
+import { loadUser } from './stores/userStore';
 import { login, logout } from './auth';
 import { setUser, clearUser } from './stores/userStore';
 
@@ -119,7 +120,9 @@ const userApi = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
       }, true);
-      login(response.token, response.refresh_token, response.user); // Pass user data here
+      console.log('Login response:', response);
+      login(response.token, response.refresh_token, response.user);
+      loadUser();  // Add this line to load the user data after login
       return response;
     } catch (error) {
       console.error('Login failed:', error);

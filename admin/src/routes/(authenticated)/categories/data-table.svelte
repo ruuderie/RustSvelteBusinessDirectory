@@ -1,4 +1,6 @@
 <script>
+    import { run } from 'svelte/legacy';
+
     import { onMount } from 'svelte';
     import { writable, readable } from 'svelte/store';
     import { api } from '$lib/api';  // Update this import
@@ -22,13 +24,13 @@
     import { goto } from '$app/navigation';
 
     let users = [];
-    let loading = true;
-    let error = null;
+    let loading = $state(true);
+    let error = $state(null);
 
     const filterValue = writable('');
 
-    let table;
-    const tableProps = writable(null);
+    let table = $state();
+    const tableProps = $state(writable(null));
 
     const rows = writable([]); // Ensure rows is a writable store
 
@@ -109,45 +111,55 @@
         goto('/users/create');
     }
 
-    $: if (table && $filterValue) {
-        table.filter.setGlobalFilter($filterValue);
-    }
+    run(() => {
+        if (table && $filterValue) {
+            table.filter.setGlobalFilter($filterValue);
+        }
+    });
 
-    let hideForId = {};
+    let hideForId = $state({});
     const flatColumns = [];
 
     function initializeHideForId() {
         hideForId = Object.fromEntries(flatColumns.map(c => [c.id, true]));
     }
 
-    $: if ($tableProps) {
-        console.log('tableProps', $tableProps);
-        console.log('tableProps.flatColumns', $tableProps.flatColumns);
-        console.log('tableProps.flatColumns.length', $tableProps.flatColumns?.length);
-        console.log('rows', $rows);
-    }
+    run(() => {
+        if ($tableProps) {
+            console.log('tableProps', $tableProps);
+            console.log('tableProps.flatColumns', $tableProps.flatColumns);
+            console.log('tableProps.flatColumns.length', $tableProps.flatColumns?.length);
+            console.log('rows', $rows);
+        }
+    });
 
-    $: if (tableProps?.pluginStates?.hide?.hiddenColumnIds) {
-        tableProps.pluginStates.hide.hiddenColumnIds = Object.entries(hideForId)
-            .filter(([, hide]) => !hide)
-            .map(([id]) => id);
-    }
+    run(() => {
+        if (tableProps?.pluginStates?.hide?.hiddenColumnIds) {
+            tableProps.pluginStates.hide.hiddenColumnIds = Object.entries(hideForId)
+                .filter(([, hide]) => !hide)
+                .map(([id]) => id);
+        }
+    });
 
     const hideableCols = ["username", "email", "is_admin", "is_active", "created_at"];
 
-    $: if ($tableProps && $tableProps.rows && typeof $tableProps.rows.subscribe === 'function') {
-        $tableProps.rows.subscribe(value => {
-            rows.set(value);
-        });
-    }
+    run(() => {
+        if ($tableProps && $tableProps.rows && typeof $tableProps.rows.subscribe === 'function') {
+            $tableProps.rows.subscribe(value => {
+                rows.set(value);
+            });
+        }
+    });
 
-    $: if ($rows && typeof $rows.subscribe === 'function') {
-        $rows.subscribe(value => {
-            if (!Array.isArray(value)) {
-                console.error('rows is not an array:', value);
-            }
-        });
-    }
+    run(() => {
+        if ($rows && typeof $rows.subscribe === 'function') {
+            $rows.subscribe(value => {
+                if (!Array.isArray(value)) {
+                    console.error('rows is not an array:', value);
+                }
+            });
+        }
+    });
 
 </script>
 
@@ -164,11 +176,13 @@
             Create User
         </Button>
         <DropdownMenu.Root>
-            <DropdownMenu.Trigger asChild let:builder>
-                <Button variant="outline" class="ml-auto" builders={[builder]}>
-                    Columns <ChevronDown class="ml-2 h-4 w-4" />
-                </Button>
-            </DropdownMenu.Trigger>
+            <DropdownMenu.Trigger asChild >
+                {#snippet children({ builder })}
+                                <Button variant="outline" class="ml-auto" builders={[builder]}>
+                        Columns <ChevronDown class="ml-2 h-4 w-4" />
+                    </Button>
+                                            {/snippet}
+                        </DropdownMenu.Trigger>
             <DropdownMenu.Content class="bg-white shadow-md rounded-md">
                 {#each tableProps?.flatColumns || [] as col}
                     {#if hideableCols.includes(col.id)}
@@ -227,7 +241,7 @@
                                             {#if cell.column.id === 'id'}
                                                 {@const renderResult = cell.render()}
                                                 {#if renderResult && renderResult.component}
-                                                    <svelte:component this={renderResult.component} {...renderResult.props} />
+                                                    <renderResult.component {...renderResult.props} />
                                                 {:else}
                                                     {cell.value ?? ''}
                                                 {/if}

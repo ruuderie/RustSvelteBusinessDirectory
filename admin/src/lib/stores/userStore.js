@@ -44,8 +44,15 @@ export const user = writable(null);
 
 export async function loadUser() {
     try {
-        const userData = await api.user.getProfile();
-        user.set(userData);
+        // Instead of fetching from the API, get the user data from localStorage
+        const userData = JSON.parse(localStorage.getItem('userData'));
+        if (userData) {
+            console.log('Loading user data from localStorage:', userData);
+            user.set(userData);
+        } else {
+            console.log('No user data found in localStorage');
+            user.set(null);
+        }
     } catch (error) {
         console.error('Failed to load user data:', error);
         user.set(null);
@@ -53,6 +60,7 @@ export async function loadUser() {
 }
 
 export function setUser(userData) {
+    console.log('Setting user data:', userData);
     user.set(userData);
 }
 
