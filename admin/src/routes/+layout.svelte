@@ -9,7 +9,8 @@
   import { checkAuth } from '$lib/auth';
   import { onMount } from 'svelte';
   import Header from '$lib/components/Header.svelte';
-
+  import Ripple from '$lib/components/Ripple.svelte';
+  import Globe from '$lib/components/Globe.svelte';
   let isLoading = true;
 
   onMount(async () => {
@@ -24,14 +25,8 @@
     isAuthenticated.set(isAuth);
     isLoading = false;
 
-    // Redirect based on authentication status
-    if (isAuth && $page.url.pathname === '/') {
-      goto('/home');
-    } else if (!isAuth && $page.url.pathname !== '/login' && $page.url.pathname !== '/register' || $page.url.pathname == '/(authenticated)') {
-      goto('/');
-    }
-
-    
+    console.log('App initialized, isAuthenticated:', isAuth);
+    console.log('Current path:', $page.url.pathname);
   }
 
   // Subscribe to theme changes
@@ -39,20 +34,6 @@
     theme.subscribe(currentTheme => {
       document.documentElement.classList.toggle('dark', currentTheme === 'dark');
     });
-  }
-
-  // Watch for route changes
-  $: if (browser && !isLoading) {
-    handleRouteChange($page.url.pathname);
-  }
-
-  async function handleRouteChange(path) {
-    const isAuth = await checkAuth();
-    if (!isAuth && path !== '/login' && path !== '/register' && path !== '/') {
-      goto('/');
-    } else if (isAuth && path === '/') {
-      goto('/home');
-    }
   }
 </script>
 
@@ -65,6 +46,8 @@
     <Header />
 
     <main class="flex-grow container mx-auto px-4 py-8">
+      <Globe class="top-28" />
+
       <slot />
     </main>
 

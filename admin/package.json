@@ -22,6 +22,7 @@
     "bits-ui": "^0.21.15",
     "chart.js": "^4.4.4",
     "clsx": "^2.1.1",
+    "cobe": "^0.6.3",
     "formsnap": "^1.0.1",
     "lucide-svelte": "^0.445.0",
     "mode-watcher": "^0.4.1",
@@ -29,7 +30,7 @@
     "svelte-headless-table": "^0.18.2",
     "svelte-radix": "^1.1.1",
     "sveltekit-superforms": "^2.17.0",
-    "tailwind-merge": "^2.5.2",
+    "tailwind-merge": "^2.5.4",
     "tailwind-variants": "^0.2.1",
     "tailwindcss-animate": "^1.0.7",
     "zod": "^3.23.8"
