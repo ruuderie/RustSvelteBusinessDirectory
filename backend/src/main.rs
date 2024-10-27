@@ -7,6 +7,7 @@ mod middleware;
 mod handlers;
 mod admin;
 mod models;
+mod traits;
 use axum::http::{self,HeaderName, HeaderValue, Method,Request, StatusCode};
 use axum::body::Body;
 use axum::middleware::{from_fn_with_state, from_fn, Next};
