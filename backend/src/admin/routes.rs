@@ -6,7 +6,7 @@ use axum::{
     response::{IntoResponse, Json as JsonResponse},
 };
 use sea_orm::DatabaseConnection;
-use crate::handlers::{admin, categories, profiles, templates};
+use crate::handlers::{admin, categories, profiles, templates, contacts, customers, leads, deals, cases, files};
 use crate::auth::*;
 use crate::middleware::*;
 use axum::middleware::from_fn;
@@ -18,13 +18,39 @@ pub fn admin_routes(db: DatabaseConnection) -> Router {
     Router::new()
         .nest("/", {
             Router::new()
+
+                
                 // User management
                 .route("/admin/users", get(admin::list_users))
                 .route("/admin/users/:user_id", get(admin::get_user))
                 .route("/admin/users/:user_id", put(admin::update_user))
                 .route("/admin/users/:user_id", delete(admin::delete_user))
                 .route("/admin/users/:user_id/toggle-admin", post(admin::toggle_admin))
+                // Customer management
+                .route("/admin/customers", get(customers::get_customers).post(customers::create_customer))
+                .route("/admin/customers/:customer_id", get(customers::get_customer).put(customers::update_customer).delete(customers::delete_customer))
+                // Lead management
+                .route("/admin/leads", get(leads::get_leads).post(leads::create_lead))
+                .route("/admin/leads/:lead_id", get(leads::get_lead).put(leads::update_lead).delete(leads::delete_lead))
+                // Deal management
+                .route("/admin/deals", get(deals::get_deals).post(deals::create_deal))
+                .route("/admin/deals/:deal_id", get(deals::get_deal).put(deals::update_deal).delete(deals::delete_deal))
+                .route("/admin/deals/:deal_id/files/:file_id", post(deals::add_file_to_deal))
+                .route("/admin/deals/:deal_id/files", get(deals::get_deal_files))
+                //Contact management
+                .route("/admin/contacts", get(contacts::get_contacts).post(contacts::create_contact))
+                .route("/admin/contacts/:contact_id", get(contacts::get_contact).put(contacts::update_contact).delete(contacts::delete_contact))
+                // Case Management
+                .route("/admin/cases", get(cases::get_cases).post(cases::create_case))
+                .route("/admin/cases/:case_id", get(cases::get_case).put(cases::update_case).delete(cases::delete_case))
 
+                //File Management
+.route("/admin/files", post(files::create_file))
+.route("/admin/files/:id", put(files::update_file))
+                .route("/admin/files/:id", get(files::get_file))
+                .route("/admin/files/:id/info", get(files::get_file_info))
+                .route("/admin/files/:id/thumbnail", get(files::get_file_thumbnail))
+                .route("/admin/files/:id", delete(files::delete_file))
                 // Directory management
                 .route("/admin/directory-stats", get(admin::get_all_directory_stats))
                 .route("/admin/directory-stats/:directory_id", get(admin::get_directory_stats))

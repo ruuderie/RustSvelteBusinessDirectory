@@ -1,9 +1,13 @@
+pub use validator::Validate;
 //CRM
 pub mod cases;
 pub mod activities;
 pub mod deals;
 pub mod leads;
 pub mod customers;
+pub mod contacts;
+pub mod files;
+pub mod notes;
 
 //Admin
 pub mod ad_purchases;

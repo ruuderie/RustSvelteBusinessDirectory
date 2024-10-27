@@ -1,11 +1,13 @@
 //CRM
 pub mod lead;
 pub mod deal;
+pub mod deal_contact;
 pub mod customer;
 pub mod contact;
 pub mod activity;
 pub mod case;
 pub mod file;
+pub mod file_association;
 pub mod note;
 
 //DIRECTORIES
