@@ -9,12 +9,14 @@
   import { logout } from '$lib/auth';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
+
   let darkMode;
+
   $: userName = $user ? `${$user.first_name} ${$user.last_name}` : 'User';
   $: userInitials = $user ? `${$user.first_name[0]}${$user.last_name[0]}` : 'U';
-
+  
   onMount(() => {
-    console.log('user', $user);
     darkMode = localStorage.getItem('darkMode') === 'true';
     document.documentElement.classList.toggle('dark', darkMode);
   });
@@ -32,11 +34,14 @@
   function handleRegister() {
     goto('/register');
   }
+
+  // Add this function to determine the home route
+  $: homeRoute = $isAuthenticated ? '/home' : '/';
 </script>
 
 <header class="bg-background border-b border-border">
   <nav class="container mx-auto px-4 py-3 flex justify-between items-center">
-    <a href="/" class="text-xl font-semibold text-foreground flex items-center">
+    <a href={homeRoute} class="text-xl font-semibold text-foreground flex items-center">
       <Command class="w-8 h-8 mr-2 text-primary" />
       <span>Oply Command Center</span>
     </a>

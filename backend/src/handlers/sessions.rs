@@ -149,11 +149,11 @@ pub async fn create_session(
 pub async fn validate_session(
     Extension(db): Extension<DatabaseConnection>,
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<Json<SessionResponse>, StatusCode> {
     let token = bearer.token().to_string();
     
     let session = match session::Entity::find()
-        .filter(session::Column::BearerToken.eq(token))
+        .filter(session::Column::BearerToken.eq(token.clone()))
         .one(&db)
         .await
     {
@@ -178,12 +178,37 @@ pub async fn validate_session(
         return Err(StatusCode::UNAUTHORIZED);
     }
 
+    // Get user information
+    let user = match user::Entity::find_by_id(session.user_id)
+        .one(&db)
+        .await {
+            Ok(Some(user)) => user,
+            Ok(None) => {
+                tracing::error!("User not found for session");
+                return Err(StatusCode::UNAUTHORIZED);
+            },
+            Err(e) => {
+                tracing::error!("Database error when finding user: {:?}", e);
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        };
+
     // Update last_accessed_at
     let mut updated_session: session::ActiveModel = session.into();
     updated_session.last_accessed_at = Set(Utc::now());
     updated_session.update(&db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok(StatusCode::OK)
+    Ok(Json(SessionResponse { 
+        user: Some(UserInfo {
+            id: user.id,
+            email: user.email,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            is_admin: user.is_admin,
+        }),
+        token: token,
+        refresh_token: String::new(), // We don't need to return a new refresh token for validation
+    }))
 }
 
 pub async fn delete_session(

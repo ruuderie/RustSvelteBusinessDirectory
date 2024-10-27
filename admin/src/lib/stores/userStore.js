@@ -1,6 +1,6 @@
 import { writable, derived } from 'svelte/store';
 import { api } from '$lib/api';
-
+import { browser } from '$app/environment';
 
 export const users = writable([]);
 export const loading = writable(true);
@@ -40,23 +40,51 @@ export function setUsers(newUsers) {
     pagination.update(state => ({ ...state, totalItems: newUsers.length }));
 }
 
-export const user = writable(null);
+function createUserStore() {
+    const { subscribe, set } = writable(null);
+
+    return {
+        subscribe,
+        set: (userData) => {
+            if (userData && userData.first_name && userData.last_name) {
+                console.log('Setting user data in store:', userData);
+                set(userData);
+            } else {
+                console.warn('User data is incomplete:', userData);
+            }
+        },
+        clear: () => {
+            console.log('Clearing user data from store');
+            set(null);
+        }
+    };
+}
+
+export const user = createUserStore();
 
 export async function loadUser() {
-    try {
-        // Instead of fetching from the API, get the user data from localStorage
-        const userData = JSON.parse(localStorage.getItem('userData'));
-        if (userData) {
-            console.log('Loading user data from localStorage:', userData);
-            user.set(userData);
-        } else {
-            console.log('No user data found in localStorage');
-            user.set(null);
+    if (browser) {
+        const storedUser = localStorage.getItem('userData');
+        if (storedUser) {
+            try {
+                const userData = JSON.parse(storedUser);
+                console.log('Loading user data from localStorage:', userData);
+                if (userData && userData.first_name && userData.last_name) {
+                    user.set(userData);
+                    return true;
+                } else {
+                    console.warn('Stored user data is incomplete:', userData);
+                    return false;
+                }
+            } catch (e) {
+                console.error('Failed to parse stored user data:', e);
+                user.set(null);
+                return false;
+            }
         }
-    } catch (error) {
-        console.error('Failed to load user data:', error);
-        user.set(null);
+        return false;
     }
+    return false;
 }
 
 export function setUser(userData) {
@@ -65,5 +93,5 @@ export function setUser(userData) {
 }
 
 export function clearUser() {
-    user.set(null);
+    user.clear();
 }

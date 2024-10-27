@@ -12,11 +12,15 @@ export async function checkAuth() {
     if (token) {
       console.log("Token found, verifying session");
       try {
-        // Verify the token and get user session info
         const sessionInfo = await api.user.verifySession();
         if (sessionInfo.isValid) {
           console.log("Session is valid, setting isAuthenticated to true");
           isAuthenticated.set(true);
+          if (sessionInfo.user) {
+            setUser(sessionInfo.user);
+          } else {
+            await loadUser(); // Fallback to stored user data
+          }
           return true;
         } else {
           // Token is invalid or expired, try to refresh
@@ -25,6 +29,9 @@ export async function checkAuth() {
           if (refreshResult.success) {
             console.log("Token refreshed successfully, setting isAuthenticated to true");
             isAuthenticated.set(true);
+            if (refreshResult.user) {
+              setUser(refreshResult.user);
+            }
             return true;
           } else {
             console.error('Failed to refresh token:', refreshResult.error);

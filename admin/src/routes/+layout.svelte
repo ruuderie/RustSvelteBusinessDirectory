@@ -35,6 +35,9 @@
       document.documentElement.classList.toggle('dark', currentTheme === 'dark');
     });
   }
+
+  // Add this to check if we're on the root or login route
+  $: showGlobe = $page.url.pathname === '/' || $page.url.pathname === '/login';
 </script>
 
 {#if isLoading}
@@ -46,7 +49,9 @@
     <Header />
 
     <main class="flex-grow container mx-auto px-4 py-8">
-      <Globe class="top-28" />
+      {#if showGlobe}
+        <Globe class="top-28" />
+      {/if}
 
       <slot />
     </main>

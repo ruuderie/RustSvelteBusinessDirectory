@@ -104,7 +104,14 @@ async function verifySession() {
       return { isValid: false, error: `Failed to verify session. Status: ${response.status}` };
     }
 
-    return { isValid: true };
+    const data = await response.json();
+    
+    // Store user data if it exists
+    if (data.user) {
+      localStorage.setItem('userData', JSON.stringify(data.user));
+    }
+
+    return { isValid: true, user: data.user };
   } catch (error) {
     console.error('Error in verifySession:', error);
     return { isValid: false, error: error.message };

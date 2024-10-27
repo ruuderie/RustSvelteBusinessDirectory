@@ -8,6 +8,7 @@
     import { theme } from '$lib/stores/appStore';
     import { goto } from '$app/navigation';
     import { loadUser } from '$lib/stores/userStore';
+    import { user } from '$lib/stores/userStore';
 
     let isLoading = true;
 
@@ -48,6 +49,14 @@
             goto('/login', { replaceState: true });
         }
     }
+
+    afterUpdate(() => {
+        console.log('Layout updated - Current user:', $user);
+    });
+
+    $: if ($user) {
+        console.log('User data changed in layout:', $user);
+    }
 </script>
 
 {#if isLoading}
@@ -55,7 +64,5 @@
         Loading...
     </div>
 {:else}
-
-            <slot />
-
+    <slot />
 {/if}

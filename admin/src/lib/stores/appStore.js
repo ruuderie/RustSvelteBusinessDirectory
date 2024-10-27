@@ -3,15 +3,14 @@ import { browser } from '$app/environment';
 
 // Import icons
 import homeIcon from '$lib/assets/icons/home.svg';
-import leadIcon from '$lib/assets/icons/lead.svg';
-import customerIcon from '$lib/assets/icons/client.svg';
-import dealIcon from '$lib/assets/icons/deal.svg';
-import listingIcon from '$lib/assets/icons/announcement.svg';
-
 import userIcon from '$lib/assets/icons/user.svg';
 import folderIcon from '$lib/assets/icons/folder.svg';
 import templateIcon from '$lib/assets/icons/template.svg';
 import reportIcon from '$lib/assets/icons/report.svg';
+import clientIcon from '$lib/assets/icons/company.svg';      // You'll need to add this
+import leadIcon from '$lib/assets/icons/user_60.png';         // You'll need to add this
+import dealIcon from '$lib/assets/icons/badge-dollar-sign.svg';         // You'll need to add this
+import listingIcon from '$lib/assets/icons/announcement.svg';   // You'll need to add this
 
 function createThemeStore() {
     const defaultTheme = 'light';
@@ -46,7 +45,7 @@ export const selectedTeam = writable('Oply');
 const navItems = {
   Oply: [
     { href: "/home", label: "Dashboard", icon: homeIcon },
-    { href: "/customers", label: "Clients", icon: customerIcon },
+    { href: "/customers", label: "Clients", icon: clientIcon },
     { href: "/leads", label: "Leads", icon: leadIcon },
     { href: "/deals", label: "Deals", icon: dealIcon },
     { href: "/listings", label: "Listings", icon: listingIcon },
