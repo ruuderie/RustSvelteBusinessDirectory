@@ -14,7 +14,7 @@ mod m20230920_create_ad_purchases_table;
 mod m20240001_update_timestamp_migration;
 mod m20230911_create_sessions_table;
 mod m20230921_add_user_columns;
-mod m20240922_create_request_log_table;
+mod m20240922_create_crm_tables;
 
 pub struct Migrator;
 
@@ -35,7 +35,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20230918_create_listings_table::Migration),
             Box::new(m20230919_create_listing_attributes_table::Migration),
             Box::new(m20230920_create_ad_purchases_table::Migration),
-            Box::new(m20240922_create_request_log_table::Migration),
+            Box::new(m20240922_create_crm_tables::Migration),
             Box::new(m20240001_update_timestamp_migration::Migration),
         ]
     }

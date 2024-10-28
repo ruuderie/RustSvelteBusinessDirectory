@@ -22,6 +22,7 @@ pub enum Relation {
     Case,
     Deal,
     Lead,
+    User,
 }
 
 impl RelationTrait for Relation {
@@ -58,6 +59,10 @@ impl RelationTrait for Relation {
             Self::Lead => Entity::belongs_to(super::lead::Entity)
                 .from(Column::AssociatedEntityId)
                 .to(super::lead::Column::Id)
+                .into(),
+            Self::User => Entity::belongs_to(super::user::Entity)
+                .from(Column::AssociatedEntityId)
+                .to(super::user::Column::Id)
                 .into(),
         }
     }
@@ -111,4 +116,9 @@ impl Related<super::lead::Entity> for Entity {
     }
 }
 
+impl Related<super::user::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::User.def()
+    }
+}
 impl ActiveModelBehavior for ActiveModel {}

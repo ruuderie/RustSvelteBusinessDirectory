@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use serde_json;
-use crate::models::address::{ AddressJson};
+use crate::models::address::AddressJson;
 use crate::traits::file::FileAssociable;
 use crate::models::file::{FileAssociation, FileModel};
 use crate::entities::{file_association,file}; 
