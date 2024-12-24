@@ -6,7 +6,7 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        // Create Customer table
+        // Create Customer table first (no foreign key dependencies)
         manager
             .create_table(
                 Table::create()
@@ -39,33 +39,7 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        // Create Lead table
-        manager
-            .create_table(
-                Table::create()
-                    .table(Lead::Table)
-                    .if_not_exists()
-                    .col(ColumnDef::new(Lead::Id).uuid().not_null().primary_key())
-                    .col(ColumnDef::new(Lead::AssociatedDealId).uuid().null())
-                    .col(ColumnDef::new(Lead::Name).string().not_null())
-                    .col(ColumnDef::new(Lead::Email).string().null())
-                    .col(ColumnDef::new(Lead::Phone).string().null())
-                    .col(ColumnDef::new(Lead::Status).string().not_null())
-                    .col(ColumnDef::new(Lead::IsConverted).boolean().not_null())
-                    .col(ColumnDef::new(Lead::CreatedAt).timestamp_with_time_zone().not_null())
-                    .col(ColumnDef::new(Lead::UpdatedAt).timestamp_with_time_zone().not_null())
-                    .foreign_key(
-                        ForeignKey::create()
-                            .name("fk-lead-deal_id")
-                            .from(Lead::Table, Lead::AssociatedDealId)
-                            .to(Deal::Table, Deal::Id)
-                            .on_delete(ForeignKeyAction::SetNull)
-                    )
-                    .to_owned(),
-            )
-            .await?;
-
-        // Create Deal table
+        // Create Deal table second (depends on Customer)
         manager
             .create_table(
                 Table::create()
@@ -87,6 +61,32 @@ impl MigrationTrait for Migration {
                             .from(Deal::Table, Deal::CustomerId)
                             .to(Customer::Table, Customer::Id)
                             .on_delete(ForeignKeyAction::Cascade)
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        // Create Lead table third (depends on Deal)
+        manager
+            .create_table(
+                Table::create()
+                    .table(Lead::Table)
+                    .if_not_exists()
+                    .col(ColumnDef::new(Lead::Id).uuid().not_null().primary_key())
+                    .col(ColumnDef::new(Lead::AssociatedDealId).uuid().null())
+                    .col(ColumnDef::new(Lead::Name).string().not_null())
+                    .col(ColumnDef::new(Lead::Email).string().null())
+                    .col(ColumnDef::new(Lead::Phone).string().null())
+                    .col(ColumnDef::new(Lead::Status).string().not_null())
+                    .col(ColumnDef::new(Lead::IsConverted).boolean().not_null())
+                    .col(ColumnDef::new(Lead::CreatedAt).timestamp_with_time_zone().not_null())
+                    .col(ColumnDef::new(Lead::UpdatedAt).timestamp_with_time_zone().not_null())
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-lead-deal_id")
+                            .from(Lead::Table, Lead::AssociatedDealId)
+                            .to(Deal::Table, Deal::Id)
+                            .on_delete(ForeignKeyAction::SetNull)
                     )
                     .to_owned(),
             )
