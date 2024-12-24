@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 pub mod api;
 pub mod auth;
 pub mod db;

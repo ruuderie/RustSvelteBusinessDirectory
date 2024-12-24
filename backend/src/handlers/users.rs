@@ -5,6 +5,7 @@ use crate::entities::{
     user_account::{self, Entity as UserAccount},
     session::{self, Entity as Session},
     account::{self, Entity as Account},
+    directory::Entity,
 };
 use axum::{
     body::Body, extract::{Extension, Json, Path, State, TypedHeader}, headers::{HeaderMap, UserAgent}, http::{header::USER_AGENT, StatusCode}, response::IntoResponse, routing::{get, post}, Router
@@ -56,10 +57,25 @@ pub async fn get_user_profile(
 pub async fn register_user(
     State(db): State<DatabaseConnection>,
     Json(user_data): Json<UserRegistration>,
-) -> Result<Json<user::Model>, StatusCode> {
+) -> Result<(StatusCode, Json<user::Model>), (StatusCode, String)> {
     tracing::info!("Received registration request for email: {}", user_data.email);
 
     let directory_id = user_data.directory_id;
+
+    // Verify that the directory exists
+    let directory = Entity::find_by_id(directory_id)
+        .one(&db)
+        .await
+        .map_err(|err| {
+            let error_msg = format!("Database error when checking directory: {:?}", err);
+            tracing::error!("{}", error_msg);
+            (StatusCode::INTERNAL_SERVER_ERROR, error_msg)
+        })?
+        .ok_or_else(|| {
+            let error_msg = format!("Directory not found: {}", directory_id);
+            tracing::error!("{}", error_msg);
+            (StatusCode::NOT_FOUND, error_msg)
+        })?;
 
     // Step 1: Check if a user already exists with the same email in the directory
     let existing_user = User::find()
@@ -67,20 +83,23 @@ pub async fn register_user(
         .one(&db)
         .await
         .map_err(|err| {
-            tracing::error!("Database error when checking for existing user: {:?}", err);
-            StatusCode::INTERNAL_SERVER_ERROR
+            let error_msg = format!("Database error when checking for existing user: {:?}", err);
+            tracing::error!("{}", error_msg);
+            (StatusCode::INTERNAL_SERVER_ERROR, error_msg)
         })?;
 
     if existing_user.is_some() {
-        tracing::warn!("User with email {} already exists in the system", user_data.email);
-        return Err(StatusCode::CONFLICT);
+        let error_msg = format!("User with email {} already exists in the system", user_data.email);
+        tracing::warn!("{}", error_msg);
+        return Err((StatusCode::CONFLICT, error_msg));
     }
 
     // Step 2: Hash password and create a new user
     let hashed_password = hash_password(&user_data.password)
         .map_err(|err| {
-            tracing::error!("Error hashing password: {:?}", err);
-            StatusCode::INTERNAL_SERVER_ERROR
+            let error_msg = format!("Error hashing password: {:?}", err);
+            tracing::error!("{}", error_msg);
+            (StatusCode::INTERNAL_SERVER_ERROR, error_msg)
         })?;
 
     // Clone username and email before moving them
@@ -98,26 +117,56 @@ pub async fn register_user(
         password_hash: Set(hashed_password),
         is_admin: Set(false),
         is_active: Set(true),
-        last_login: Set(None),
+        last_login: Set(Some(Utc::now())),
         created_at: Set(Utc::now()),
         updated_at: Set(Utc::now()),
     };
 
     let inserted_user = new_user.insert(&db).await.map_err(|err| {
-        tracing::error!("Database error when inserting user: {:?}", err);
-        StatusCode::INTERNAL_SERVER_ERROR
+        let error_msg = format!("Database error when inserting user: {:?}", err);
+        tracing::error!("{}", error_msg);
+        (StatusCode::INTERNAL_SERVER_ERROR, error_msg)
     })?;
 
-    // Step 4: Find or create the Profile for the directory
-    let profile: Option<profile::Model> = profile::Entity::find()
+    // Step 4: Find or create the Account for the directory
+    let account = match account::Entity::find()
+        .filter(account::Column::DirectoryId.eq(directory_id))
+        .one(&db)
+        .await
+        .map_err(|err| {
+            let error_msg = format!("Database error when finding account: {:?}", err);
+            tracing::error!("{}", error_msg);
+            (StatusCode::INTERNAL_SERVER_ERROR, error_msg)
+        })? {
+            Some(account) => account,
+            None => {
+                // Create a new Account if not found
+                let new_account = account::ActiveModel {
+                    id: Set(Uuid::new_v4()),
+                    directory_id: Set(directory_id),
+                    name: Set(username.clone()),
+                    is_active: Set(true),
+                    created_at: Set(Utc::now()),
+                    updated_at: Set(Utc::now()),
+                };
+                new_account.insert(&db).await.map_err(|err| {
+                    let error_msg = format!("Database error when creating account: {:?}", err);
+                    tracing::error!("{}", error_msg);
+                    (StatusCode::INTERNAL_SERVER_ERROR, error_msg)
+                })?
+            }
+        };
+
+    // Step 5: Find or create the Profile for the directory
+    let profile = profile::Entity::find()
         .filter(profile::Column::DirectoryId.eq(directory_id))
         .one(&db)
         .await
         .map_err(|err| {
-            tracing::error!("Database error when finding profile: {:?}", err);
-            StatusCode::INTERNAL_SERVER_ERROR
+            let error_msg = format!("Database error when finding profile: {:?}", err);
+            tracing::error!("{}", error_msg);
+            (StatusCode::INTERNAL_SERVER_ERROR, error_msg)
         })?;
-    let account_id = profile.clone().unwrap().account_id;
 
     let profile_id = if let Some(profile) = profile {
         profile.id
@@ -125,7 +174,7 @@ pub async fn register_user(
         // Create a new Profile if not found
         let new_profile = profile::ActiveModel {
             id: Set(Uuid::new_v4()),
-            account_id: Set(account_id.clone()),
+            account_id: Set(account.id),
             additional_info: Set(None),
             is_active: Set(true),
             directory_id: Set(directory_id),
@@ -141,18 +190,19 @@ pub async fn register_user(
         };
 
         let inserted_profile = new_profile.insert(&db).await.map_err(|err| {
-            tracing::error!("Database error when inserting profile: {:?}", err);
-            StatusCode::INTERNAL_SERVER_ERROR
+            let error_msg = format!("Database error when inserting profile: {:?}", err);
+            tracing::error!("{}", error_msg);
+            (StatusCode::INTERNAL_SERVER_ERROR, error_msg)
         })?;
 
         inserted_profile.id
     };
 
-    // Step 5: Create the UserAccount to link user and profile
+    // Step 6: Create the UserAccount to link user and profile
     let new_user_account = user_account::ActiveModel {
         id: Set(Uuid::new_v4()),
         user_id: Set(inserted_user.id),
-        account_id: Set(account_id),
+        account_id: Set(account.id),
         role: Set(user_account::UserRole::Owner),
         created_at: Set(Utc::now()),
         is_active: Set(true),
@@ -160,11 +210,12 @@ pub async fn register_user(
     };
 
     new_user_account.insert(&db).await.map_err(|err| {
-        tracing::error!("Database error when creating user profile: {:?}", err);
-        StatusCode::INTERNAL_SERVER_ERROR
+        let error_msg = format!("Database error when creating user account: {:?}", err);
+        tracing::error!("{}", error_msg);
+        (StatusCode::INTERNAL_SERVER_ERROR, error_msg)
     })?;
 
-    Ok(Json(inserted_user))
+    Ok((StatusCode::CREATED, Json(inserted_user)))
 }
 
 pub async fn login_user(
