@@ -13,6 +13,7 @@ use uuid::Uuid;
 use crate::{api, migration};
 use hyper::body::Bytes;
 use chrono::Utc;
+use super::test_utils;
 
 async fn setup_test_app() -> (Router, DatabaseConnection) {
     // Load test database URL from environment
@@ -74,79 +75,12 @@ async fn cleanup_database(db: &DatabaseConnection) {
 async fn test_register_user() {
     let (app, db) = setup_test_app().await;
 
-    // Create a test directory type first
-    let directory_type_id = Uuid::new_v4();
-    let new_directory_type = crate::entities::directory_type::ActiveModel {
-        id: Set(directory_type_id),
-        name: Set("Test Directory Type".to_string()),
-        description: Set("Test Directory Type Description".to_string()),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-    };
+    // Create test directory type and directory using utilities
+    let directory_type = test_utils::create_test_directory_type(&db).await;
+    let directory = test_utils::create_test_directory(&db, directory_type.id).await;
 
-    let directory_type = new_directory_type.insert(&db)
-        .await
-        .expect("Failed to create test directory type");
-
-    // Create a test directory
-    let directory_id = Uuid::new_v4();
-    let new_directory = crate::entities::directory::ActiveModel {
-        id: Set(directory_id),
-        directory_type_id: Set(directory_type.id),
-        name: Set("Test Directory".to_string()),
-        domain: Set("test.example.com".to_string()),
-        description: Set("Test Directory Description".to_string()),
-        created_at: Set(Utc::now()),
-        updated_at: Set(Utc::now()),
-    };
-
-    let directory = new_directory.insert(&db)
-        .await
-        .expect("Failed to create test directory");
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/register")
-                .header("Content-Type", "application/json")
-                .body(Body::from(
-                    json!({
-                        "directory_id": directory.id,
-                        "username": "testuser",
-                        "first_name": "Test",
-                        "last_name": "User",
-                        "email": "test@example.com",
-                        "password": "password123",
-                        "phone": "1234567890"
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    // Capture headers before consuming the response body
-    let headers = response.headers().clone();
-    let status = response.status();
-
-    // Read and print the response body for debugging
-    let body = match response.into_body().data().await {
-        Some(Ok(data)) => String::from_utf8_lossy(&data).to_string(),
-        Some(Err(err)) => {
-            println!("Error reading body: {}", err);
-            String::new()
-        }
-        None => {
-            println!("Body is empty or not available");
-            String::new()
-        }
-    };
-
-    println!("Response headers: {:?}", headers);
-    println!("Response status: {}", status);
-    println!("Response body: {}", body);
+    // Register test user
+    let (status, body) = test_utils::register_test_user(&app, directory.id, "testuser").await;
 
     if status != StatusCode::CREATED {
         println!("Test failed with status: {}", status);
@@ -154,4 +88,21 @@ async fn test_register_user() {
     }
 
     assert_eq!(status, StatusCode::CREATED);
+}
+
+// Example of a test that builds on user registration
+#[tokio::test]
+async fn test_user_login() {
+    let (app, db) = setup_test_app().await;
+
+    // Setup prerequisites using utilities
+    let directory_type = test_utils::create_test_directory_type(&db).await;
+    let directory = test_utils::create_test_directory(&db, directory_type.id).await;
+    
+    // Register user first
+    let (register_status, _) = test_utils::register_test_user(&app, directory.id, "logintest").await;
+    assert_eq!(register_status, StatusCode::CREATED);
+
+    // Now test login
+    // ... rest of login test
 }

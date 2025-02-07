@@ -214,6 +214,33 @@ const adminApi = {
     method: 'PUT',
     body: JSON.stringify(userData)
   }),
+  fetchCustomers: (page = 1, itemsPerPage = 10) => 
+    apiCall(`/admin/customers?page=${page}&items_per_page=${itemsPerPage}`),
+  
+  fetchCustomerById: (id) => 
+    apiCall(`/admin/customers/${id}`),
+  
+  updateCustomer: (id, customerData) => 
+    apiCall(`/admin/customers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(customerData)
+    }),
+  
+  createCustomer: (customerData) => 
+    apiCall('/admin/customers', {
+      method: 'POST',
+      body: JSON.stringify(customerData)
+    }),
+  
+  deleteCustomer: (id) => 
+    apiCall(`/admin/customers/${id}`, {
+      method: 'DELETE'
+    }),
+  
+  resetCustomerPassword: (id) => 
+    apiCall(`/admin/customers/${id}/reset-password`, {
+      method: 'POST'
+    }),
 };
 
 export const api = {
