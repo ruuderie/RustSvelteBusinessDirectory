@@ -74,6 +74,8 @@ pub struct ResumeEntry {
     pub bullets: Vec<String>,
     pub display_order: i32,
     pub is_visible: bool,
+    pub slug: Option<String>,
+    pub published_at: Option<String>,
     pub metadata: Option<serde_json::Value>,
     pub overrides: Option<serde_json::Value>,
 }
@@ -89,8 +91,11 @@ pub async fn get_entry_collections() -> Result<Vec<ResumeProfile>, ServerFnError
     use axum::Extension;
     use leptos_axum::extract;
     use sqlx::Row;
+    let Extension(tenant) = extract::<Extension<crate::state::TenantContext>>().await?;
+    let tenant_id = tenant.0.unwrap_or_default();
     let Extension(state) = extract::<Extension<crate::state::AppState>>().await?;
-    let rows = sqlx::query("SELECT id, name, full_name, objective, is_public, target_role, contact_email, contact_phone, contact_location, contact_link, category_visibility, category_order FROM entry_collections ORDER BY id ASC")
+    let rows = sqlx::query("SELECT id, name, full_name, objective, is_public, target_role, contact_email, contact_phone, contact_location, contact_link, category_visibility, category_order FROM entry_collections WHERE tenant_id = $1 ORDER BY id ASC")
+        .bind(tenant_id)
         .fetch_all(&state.pool)
         .await?;
 
@@ -122,14 +127,17 @@ pub async fn get_tenant_entries(
     use axum::Extension;
     use leptos_axum::extract;
     use sqlx::Row;
+    let Extension(tenant) = extract::<Extension<crate::state::TenantContext>>().await?;
+    let tenant_id = tenant.0.unwrap_or_default();
     let Extension(state) = extract::<Extension<crate::state::AppState>>().await?;
 
     let target_id = match profile_id {
         Some(id) => id,
         None => {
             let row = sqlx::query(
-                "SELECT id FROM entry_collections WHERE is_public = true ORDER BY id ASC LIMIT 1",
+                "SELECT id FROM entry_collections WHERE is_public = true AND tenant_id = $1 ORDER BY id ASC LIMIT 1",
             )
+            .bind(tenant_id)
             .fetch_optional(&state.pool)
             .await?;
             if let Some(r) = row {
@@ -140,8 +148,9 @@ pub async fn get_tenant_entries(
         }
     };
 
-    let rows = sqlx::query("SELECT e.id, pe.profile_id, e.category, e.title, e.subtitle, e.date_range, e.bullets, pe.display_order, pe.is_visible, e.metadata, pe.overrides FROM tenant_entries e JOIN collection_entries pe ON e.id = pe.entry_id WHERE pe.profile_id = $1 ORDER BY pe.display_order ASC")
+    let rows = sqlx::query("SELECT e.id, pe.profile_id, e.category, e.title, e.subtitle, e.date_range, e.bullets, pe.display_order, pe.is_visible, e.slug, CAST(e.published_at AS TEXT) as published_at, e.metadata, pe.overrides FROM tenant_entries e JOIN collection_entries pe ON e.id = pe.entry_id WHERE pe.profile_id = $1 AND e.tenant_id = $2 ORDER BY pe.display_order ASC")
         .bind(target_id)
+        .bind(tenant_id)
         .fetch_all(&state.pool)
         .await?;
 
@@ -160,6 +169,8 @@ pub async fn get_tenant_entries(
                 bullets,
                 display_order: row.get("display_order"),
                 is_visible: row.get("is_visible"),
+                slug: row.try_get("slug").unwrap_or(None),
+                published_at: row.try_get("published_at").unwrap_or(None),
                 metadata: row.try_get("metadata").unwrap_or(None),
                 overrides: row.try_get("overrides").unwrap_or(None),
             }
@@ -754,7 +765,7 @@ pub async fn download_resume(profile_id: i32) -> Result<Vec<u8>, ServerFnError> 
         category_order: profile_row.get("category_order"),
     };
 
-    let entries_rows = sqlx::query("SELECT e.id, pe.profile_id, e.category, e.title, e.subtitle, e.date_range, e.bullets, pe.display_order, pe.is_visible, pe.overrides FROM tenant_entries e JOIN collection_entries pe ON e.id = pe.entry_id WHERE pe.profile_id = $1 ORDER BY pe.display_order ASC")
+    let entries_rows = sqlx::query("SELECT e.id, pe.profile_id, e.category, e.title, e.subtitle, e.date_range, e.bullets, pe.display_order, pe.is_visible, e.slug, CAST(e.published_at AS TEXT) as published_at, e.metadata, pe.overrides FROM tenant_entries e JOIN collection_entries pe ON e.id = pe.entry_id WHERE pe.profile_id = $1 ORDER BY pe.display_order ASC")
         .bind(profile_id).fetch_all(&state.pool).await?;
 
     let entries: Vec<ResumeEntry> = entries_rows
@@ -772,7 +783,9 @@ pub async fn download_resume(profile_id: i32) -> Result<Vec<u8>, ServerFnError> 
                 bullets,
                 display_order: row.get("display_order"),
                 is_visible: row.get("is_visible"),
-                metadata: None,
+                slug: row.try_get("slug").unwrap_or(None),
+                published_at: row.try_get("published_at").unwrap_or(None),
+                metadata: row.try_get("metadata").unwrap_or(None),
                 overrides: row.try_get("overrides").unwrap_or(None),
             }
         })
@@ -826,6 +839,48 @@ pub async fn download_resume(profile_id: i32) -> Result<Vec<u8>, ServerFnError> 
     Ok(pdf_bytes)
 }
 
+#[server(GetSingleTenantEntry, "/api")]
+pub async fn get_single_tenant_entry(
+    slug: String,
+) -> Result<Option<ResumeEntry>, ServerFnError> {
+    use axum::Extension;
+    use leptos_axum::extract;
+    use sqlx::Row;
+    
+    let Extension(tenant) = extract::<Extension<crate::state::TenantContext>>().await?;
+    let tenant_id = tenant.0.unwrap_or_default();
+    let Extension(state) = extract::<Extension<crate::state::AppState>>().await?;
+
+    let row = sqlx::query("SELECT e.id, e.category, e.title, e.subtitle, e.date_range, e.bullets, e.slug, CAST(e.published_at AS TEXT) as published_at, e.metadata FROM tenant_entries e WHERE e.slug = $1 AND e.tenant_id = $2")
+        .bind(&slug)
+        .bind(tenant_id)
+        .fetch_optional(&state.pool)
+        .await?;
+
+    if let Some(r) = row {
+        let bullets_val: serde_json::Value = r.try_get("bullets").unwrap_or(serde_json::json!([]));
+        let bullets: Vec<String> = serde_json::from_value(bullets_val).unwrap_or_default();
+        
+        Ok(Some(ResumeEntry {
+            id: r.get("id"),
+            profile_id: 0, // Individual entry viewing might not be bound to a profile
+            category: r.get("category"),
+            title: r.get("title"),
+            subtitle: r.try_get("subtitle").unwrap_or(None),
+            date_range: r.try_get("date_range").unwrap_or(None),
+            bullets,
+            display_order: 0,
+            is_visible: true,
+            slug: r.try_get("slug").unwrap_or(None),
+            published_at: r.try_get("published_at").unwrap_or(None),
+            metadata: r.try_get("metadata").unwrap_or(None),
+            overrides: None,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -866,6 +921,8 @@ mod tests {
             is_visible: true,
             metadata: None,
             overrides: None,
+            published_at: None,
+            slug: None,
         }];
 
         let tex = generate_latex_string(&profile, &entries);
@@ -905,6 +962,8 @@ mod tests {
                 is_visible: false, // Target should hide inherently
                 metadata: None,
                 overrides: None,
+                published_at: None,
+                slug: None,
             },
             ResumeEntry {
                 id: 2,
@@ -918,6 +977,8 @@ mod tests {
                 is_visible: true, // Should hide because master JSON hides Education
                 metadata: None,
                 overrides: None,
+                published_at: None,
+                slug: None,
             },
         ];
 

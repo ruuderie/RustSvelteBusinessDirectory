@@ -77,11 +77,11 @@ flowchart TD
         NP_POD[Network Pod]
     end
 
-    subgraph PG_UAT["Postgres Server (UAT)"]
-        DB_UAT[(Database: 'ruud' / UAT)]
+    subgraph PG_UAT["Postgres Server (NixOS Managed)"]
+        DB_UAT[(Database: 'atlas_uat')]
     end
 
-    subgraph PG_PROD["Postgres Server (Managed Prod)"]
+    subgraph PG_PROD["Postgres Server (NixOS Managed)"]
         DB_PROD[(Database: 'atlas_prod')]
     end
 
@@ -92,8 +92,8 @@ flowchart TD
     style DB_PROD fill:#bbf,stroke:#333,stroke-width:2px
 ```
 
-* **UAT** executes against a local/ephemeral PostgreSQL service, loading configs strictly from `k8s/overlays/uat/config.yaml` (`DATABASE_HOST: 10.42.0.1`, `DATABASE_NAME: ruud`). 
-* **PROD** will execute against a secure managed database (e.g. RDS, DigitalOcean, Supabase) with zero crossover. Code executing in UAT physically cannot see Prod data.
+* **UAT** executes against a local/ephemeral PostgreSQL service, loading configs strictly from `k8s/overlays/uat/config.yaml` (`DATABASE_HOST: 10.42.0.1`, `DATABASE_NAME: atlas_uat`). 
+* **PROD** executes against `atlas_prod`. Code executing in UAT physically cannot see Prod data. Note: legacy databases like `ruud` and `anchor` have been fully deprecated and removed.
 
 ---
 
@@ -107,7 +107,7 @@ When a request arrives, the application maps the domain to a `tenant_id` and an 
 
 ```mermaid
 flowchart LR
-    subgraph "Single Postgres Database ('ruud')"
+    subgraph "Single Postgres Database ('atlas_uat' or 'atlas_prod')"
         subgraph "Table: tenant"
             T1["id: 111 | name: 'buildwithruud'"]
             T2["id: 222 | name: 'ctbuildpros'"]
@@ -120,7 +120,7 @@ flowchart LR
         end
         
         subgraph "Table: app_domains"
-            D1["domain: 'uat.buildwithruud.com' --> instance: A"]
+            D1["domain: 'buildwithruud.com' --> instance: A"]
             D2["domain: 'directory.localhost' --> instance: B"]
         end
 
@@ -131,7 +131,7 @@ flowchart LR
         end
     end
 
-    HTTP_REQ[("HTTP Request: \n uat.buildwithruud.com")] --> D1
+    HTTP_REQ[("HTTP Request: \n buildwithruud.com")] --> D1
     D1 --> A1
     A1 --> T1
     A1 --> |"Anchor UI Engine \n loads..."| R1
@@ -155,3 +155,21 @@ Tables like `resume_entries`, `services`, and `app_pages` serve as a headless CM
 
 **4. Fully Synchronized Billing & Webhooks**
 By placing `tenant_subscription` and `webhook_endpoint` entirely inside the unified schema, you eliminate split-brain architectural issues. When a webhook hits `/api/webhooks/paddle/`, it can directly map the Stripe/Paddle reference token onto the exact `tenant_id`, instantly updating user entitlements across all connected `app_instances`.
+
+---
+
+## 3. Migration Registry & Safety Architecture
+
+To prevent deployment panics (e.g., K8s `CrashLoopBackOff` loops caused by SeaORM missing migration files), Atlas enforces strict rules on how migrations are written and registered.
+
+### The Unified Registry Rule
+* **Core Platform Migrations:** Only structural changes that affect the entire multi-tenant platform (users, billing, core tables) are allowed in `backend/src/migration/mod.rs` (the `base` vector).
+* **App-Specific Migrations:** Any migration that inserts tenant-specific content, seed data, or app-specific configurations (like Anchor CMS JSON payloads) **must** be registered within that application's trait implementation (e.g., `AnchorApp::migrations()`). 
+* *Why?* If app migrations are split between the base registry and the app registry, it causes non-deterministic ordering during the SeaORM boot sequence, leading to fatal mismatch panics.
+
+### The "Hardened Migration" Pattern
+Silent failures in data updates are strictly forbidden. If a migration needs to target a specific tenant or payload (e.g., fixing a specific customer's UI padding), it must use a robust `DO $$` block in Postgres that enforces validation:
+1. **Lookup Validation:** Always check if the target tenant/domain exists. If not, explicitly `RAISE EXCEPTION`.
+2. **Update Validation:** After an `UPDATE`, capture `GET DIAGNOSTICS v_rows_affected = ROW_COUNT;`. If it is 0, `RAISE EXCEPTION`.
+3. **Visibility:** End successful paths with `RAISE NOTICE 'SUCCESS...'` so CI deployment logs explicitly verify the data change occurred. 
+*(See `m20260426_000001_hardened_ruud_payload.rs` for the canonical example).*
