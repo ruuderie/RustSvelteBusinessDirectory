@@ -1,6 +1,10 @@
 # Atlas & Anchor Platform Architecture Overview
 
-This document outlines the system architecture of the Atlas Platform and its CMS application (Anchor), providing context for the recent UI rendering anomalies on the `uat.buildwithruud.com` tenant instance.
+This document outlines the system architecture of the Atlas Platform and its CMS application (Anchor).
+
+> See also: [`docs/auth_and_permissions.md`](auth_and_permissions.md)
+> for authentication flows, the two-layer permission model (TenantRole + App-Specific Permissions),
+> WebAuthn RP_ID scoping, and guest share token design.
 
 ## 1. System Architecture
 
